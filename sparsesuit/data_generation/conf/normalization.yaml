@@ -1,0 +1,5 @@
+dataset:
+  type: synthetic
+  sens_config: SSP
+visualize: False
+smpl_genders: [neutral]

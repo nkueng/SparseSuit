@@ -1,0 +1,7 @@
+sens_conf: SSP
+add_noise: True
+white_noise: 0.00016
+target_fps: 60
+smoothing_factor: 4
+visualize: False
+smpl_genders: [male, female]
