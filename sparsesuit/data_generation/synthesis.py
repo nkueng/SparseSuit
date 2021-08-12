@@ -1,15 +1,15 @@
 """ A script to handle the synthesis of IMU data from 17 sensors based on the AMASS dataset of SMPL pose data. """
 import os
-import tempfile
 from pathlib import Path
 import pymusim
 import numpy as np
 import pickle as pkl
 import hydra
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 from sparsesuit.constants import paths, sensors
-from sparsesuit.utils import smpl_helpers, visualization
+from sparsesuit.utils import smpl_helpers, visualization, utils
 import torch
+from normalization import Normalizer
 
 
 class Synthesizer:
@@ -19,16 +19,16 @@ class Synthesizer:
     ):
         # get params from configuration file
         self.config = cfg
-        self.add_noise = cfg["add_noise"]
         self.white_noise = cfg["white_noise"]
-        self.sens_config = cfg["sens_conf"]
+        self.add_noise = self.white_noise > 0
+        self.sens_config = cfg["sensors"]["config"]
         self.target_fps = cfg["target_fps"]
         self.smoothing_factor = cfg["smoothing_factor"]
         self.visualize = cfg["visualize"]
 
         # set internal params depending on config params
         self.src_dir = os.path.join(paths.DATA_PATH, paths.AMASS_PATH)
-        # choose target directory depending on suit and sensor configuration
+        # choose params depending on suit and sensor configuration
         if self.sens_config == "SSP":
             target_name = paths.AMASS_19_PATH
             self.sens_names = sensors.SENS_NAMES_SSP
@@ -71,23 +71,37 @@ class Synthesizer:
                 target_path = os.path.join(target_dir, filename)
 
                 # skip this asset, if the target_path already exists
-                # if os.path.exists(target_path):
-                #     continue
+                if os.path.exists(target_path):
+                    print("Skipping {}.".format(file))
+                    asset_counter += 1
+                    continue
 
+                # synthesize sensor data from this motion asset
                 Path(target_dir).mkdir(parents=True, exist_ok=True)
+                print("Synthesizing {}.".format(file))
                 if self.synthesize_asset(file_path, target_path):
                     asset_counter += 1
 
         # save configuration file for synthetic dataset
-        self.config["num_assets"] = asset_counter
-        conf_file = os.path.join(self.trgt_dir, "config.yaml")
-        conf = OmegaConf.create(self.config)
-        with open(conf_file, "wb") as f:
-            OmegaConf.save(config=conf, f=f.name)
+        sensor_info = {
+            "config": self.sens_config,
+            "type": "synthetic",
+            "count": len(self.sens_names),
+            "names": self.sens_names,
+            "vert_ids": self.sens_vert_ids,
+            "joint_ids": self.joint_ids,
+            "acc_noise": self.white_noise,
+        }
+        ds_config = {
+            "num_assets": asset_counter,
+            "fps": self.target_fps,
+            "smoothing_factor": self.smoothing_factor,
+            "sensors": sensor_info,
+        }
+        utils.write_config(path=self.trgt_dir, config=ds_config)
 
     # Extract pose parameter from src_path, save to res_path
     def synthesize_asset(self, src_path, res_path):
-        print(src_path)
         # load from pickle or npz
         data_in = {}
         if src_path.endswith(".npz"):
@@ -157,14 +171,13 @@ class Synthesizer:
         with open(res_path, "wb") as fout:
             np.savez_compressed(fout, **data_out)
 
-        print(res_path)
         print(len(data_out["imu_acc"]))
-        print("")
         return True
 
     # Get orientation and acceleration from list of 4x4 matrices and vertices
     def get_ori_accel(self, A, vertices_IMU, frame_rate):
         # extract IMU orientations from transformation matrices (in global frame)
+        # TODO: make orientations noisy
         oris = []
         for idx in self.joint_ids:
             oris.append(np.expand_dims(A[:, idx, :3, :3], axis=1))
@@ -319,13 +332,15 @@ class Synthesizer:
 
 
 @hydra.main(config_path="conf", config_name="synthesis")
-def get_config(cfg: DictConfig):
-    print(OmegaConf.to_yaml(cfg))
-    global config
-    config = cfg
+def do_synthesis(cfg: DictConfig):
+    config = dict(cfg)
+    syn = Synthesizer(cfg=config)
+    syn.synthesize_dataset()
+
+    config["dataset_type"] = "synthetic"
+    norm = Normalizer(cfg=config)
+    norm.normalize_dataset()
 
 
 if __name__ == "__main__":
-    get_config()
-    syn = Synthesizer(cfg=dict(config))
-    syn.synthesize_dataset()
+    do_synthesis()

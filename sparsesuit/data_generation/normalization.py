@@ -4,7 +4,6 @@ Input: pickle or npz files with N IMU orientations and accelerations as well as 
 for 24 joints
 Output: normalized zero-mean unit-variance input and target vectors of N-1 IMUs ready for learning """
 import shutil
-import sys
 import tarfile
 
 import numpy as np
@@ -13,70 +12,72 @@ import pickle as pkl
 from pathlib import Path
 import torch
 from welford import Welford
-import smplx
 from smplx import lbs
 from sparsesuit.constants import sensors, paths
 from sparsesuit.utils import visualization, smpl_helpers, utils
 import hydra
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
+
+# fix seed for re-producability
+seed = 14
+np.random.seed(seed)
 
 
 class Normalizer:
     def __init__(self, cfg):
         self.config = cfg
         self.visualize = cfg["visualize"]
-        self.smpl_genders = cfg["smpl_genders"]
-        dataset_config = cfg["dataset"]
-        self.dataset_type = dataset_config["type"]
-        self.sensor_config = dataset_config["sens_config"]
+        self.dataset_type = cfg["sensors"]["type"]
+        self.sens_config = cfg["sensors"]["config"]
 
         # choose dataset folder based on params
         if self.dataset_type == "synthetic":
-            if self.sensor_config == "SSP":
+            if self.sens_config == "SSP":
                 src_folder = paths.AMASS_19_PATH
                 norm_folder = paths.AMASS_19_N_PATH
                 trgt_folder = paths.AMASS_19_NN_PATH
-                sensor_names = sensors.SENS_NAMES_SSP
+                sens_names = sensors.SENS_NAMES_SSP
                 pred_trgt_joints = sensors.SMPL_SSP_JOINTS
-            elif self.sensor_config == "MVN":
+            elif self.sens_config == "MVN":
                 src_folder = paths.AMASS_17_PATH
                 norm_folder = paths.AMASS_17_N_PATH
                 trgt_folder = paths.AMASS_17_NN_PATH
-                sensor_names = sensors.SENS_NAMES_MVN
+                sens_names = sensors.SENS_NAMES_MVN
                 pred_trgt_joints = sensors.SMPL_MAJOR_JOINTS
             else:
                 raise NameError("Invalid dataset configuration. Aborting!")
             dataset_names = ["training", "validation", "test"]
-            sensor_ids = np.arange(0, len(sensor_names))
+            sensor_ids = np.arange(0, len(sens_names))
+            self.pred_trgt_joints = pred_trgt_joints
         elif self.dataset_type == "real":
             src_folder = paths.DIP_17_PATH
             norm_folder = paths.DIP_17_N_PATH
             trgt_folder = paths.DIP_17_NN_PATH
             # dict mapping subject and motion types to datasets
             dataset_names = ["training", "validation", "test"]
-            dataset_mapping = {
+            self.dataset_mapping = {
                 "s_09": "test",
                 "s_10": "test",
                 "s_01/05": "validation",
                 "s_03/05": "validation",
                 "s_07/04": "validation",
             }
-            sensor_names = sensors.SENS_NAMES_MVN
-            sensor_ids = [
-                sensors.SENS_VERTS_MVN.index(sensor) for sensor in sensor_names
-            ]
+            sens_names = sensors.SENS_NAMES_MVN
+            sensor_ids = [sensors.SENS_VERTS_MVN.index(sensor) for sensor in sens_names]
         else:
             raise NameError("Invalid dataset configuration. Aborting!")
         self.src_dir = os.path.join(paths.DATA_PATH, src_folder)
         self.norm_dir = os.path.join(paths.DATA_PATH, norm_folder)
         self.trgt_dir = os.path.join(paths.DATA_PATH, trgt_folder)
         self.dataset_names = dataset_names
-        self.dataset_mapping = dataset_mapping
-        self.sensor_names = sensor_names
+        self.sens_names = sens_names
         self.sensor_ids = sensor_ids
-        self.pred_trgt_joints = pred_trgt_joints
 
     def normalize_dataset(self):
+
+        assert os.path.exists(
+            self.src_dir
+        ), "Source directory {} does not exist! Check spelling!".format(self.src_dir)
 
         if self.visualize:
             # load neutral smpl model for evaluation of normalized sensor data
@@ -89,9 +90,20 @@ class Normalizer:
             Welford(),
         )
 
-        if not os.path.exists(self.src_dir):
-            print("Source directory does not exist!")
-            sys.exit()
+        # determine root sensor depending on sensor config
+        if self.sens_config == "SSP":
+            # the SSP has no root sensor, so a virtual sensor is derived from the two hip sensors
+            root_indx = [
+                self.sens_names.index("left_pelvis"),
+                self.sens_names.index("right_pelvis"),
+            ]
+            self.sens_names.remove("left_pelvis")
+            self.sens_names.remove("right_pelvis")
+        elif self.sens_config == "MVN":
+            root_indx = self.sens_names.index("pelvis")
+            self.sens_names.remove("pelvis")
+        else:
+            raise NameError("Invalid sensor configuration. Aborting!")
 
         # iterate over all subdirectories and files in given path
         for subdir, dirs, files in os.walk(self.src_dir):
@@ -101,10 +113,6 @@ class Normalizer:
                     not file.endswith(".npz") and not file.endswith(".pkl")
                 ):
                     continue
-
-                # DEBUG
-                # if file.split('.')[0] == '1347_Experiment3b_subject1347_back_02_poses':
-                #     stop_here = True
 
                 # load npz or pickle in subdirectory
                 data_in = {}
@@ -118,17 +126,21 @@ class Normalizer:
 
                 # extract relevant data
                 try:
-                    oris = data_in["imu_ori"]  # IMU orientation matrices of sensors
-                    accs = data_in["imu_acc"]  # IMU acceleration vectors of sensors
-                    poses = data_in["gt"]  # flattened pose vector of 24 SMPL joints
-                    pose2rot = True  # poses given in axis-angle format and need transformation to rot matrix
+                    # IMU orientation matrices of sensors
+                    oris = data_in["imu_ori"]
+                    # IMU acceleration vectors of sensors
+                    accs = data_in["imu_acc"]
+                    # flattened pose vector of 24 SMPL joints (as rot mat)
+                    poses = data_in["gt"]
+                    # poses given in axis-angle format need transformation to rot matrix
+                    pose2rot = True
                 except KeyError:
                     try:
                         # IMU orientation matrices of sensors
                         oris = np.array(data_in["ori"])
                         # IMU acceleration vectors of sensors
                         accs = np.array(data_in["acc"])
-                        # flattened pose vector of 15 SMPL joints
+                        # flattened pose vector of 15 SMPL joints in axis-angle format
                         poses = np.array(data_in["poses"])
                         pose2rot = False
                     except KeyError:
@@ -141,9 +153,7 @@ class Normalizer:
                     continue
 
                 subject_i = subdir.split(self.src_dir)[1]
-                # subjects.append(subject_i)
                 motion_type_i = file.split(".")[0]
-                # motion_types.append(motion_type_i)
 
                 # determine name of file for normalized asset
                 norm_dir_name = os.path.join(self.norm_dir, subject_i)
@@ -168,13 +178,7 @@ class Normalizer:
                 oris_sorted = oris_clean[:, self.sensor_ids]
 
                 # normalize orientation and acceleration for each frame w.r.t. root
-                if self.sensor_config == "SSP":
-                    # the SSP has no root sensor, so a virtual sensor is derived from the two hip sensors
-                    root_indx = [
-                        self.sensor_names.index("left_hip"),
-                        self.sensor_names.index("right_hip"),
-                    ]
-
+                if self.sens_config == "SSP":
                     # get hip sensor orientations
                     hip_oris = np.reshape(oris_sorted[:, root_indx], [-1, 9])
                     # transform to angle-axis
@@ -194,8 +198,7 @@ class Normalizer:
                     hip_accs = accs_sorted[:, [root_indx]]
                     # average to get virtual sensor acceleration to normalize other sensors
                     root_acc = np.mean(hip_accs, axis=2)
-                else:
-                    root_indx = self.sensor_names.index("pelvis")
+                elif self.sens_config == "MVN":
                     root_ori_inv = np.transpose(
                         oris_sorted[:, [root_indx]], [0, 1, 3, 2]
                     )
@@ -203,23 +206,18 @@ class Normalizer:
 
                 # normalize all orientations
                 oris_norm = np.matmul(root_ori_inv, oris_sorted)
-                oris_norm_wo_root = np.delete(
-                    oris_norm, root_indx, axis=1
-                )  # discard root orientation which is always identity
+                # discard root orientation which is always identity
+                oris_norm_wo_root = np.delete(oris_norm, root_indx, axis=1)
                 oris_vec = np.reshape(oris_norm_wo_root, (new_seq_length, -1))
 
                 # normalize all accelerations
                 accs_norm = accs_sorted - root_acc
                 accs_norm = np.matmul(root_ori_inv, accs_norm[..., np.newaxis])
-                accs_norm_wo_root = np.delete(
-                    accs_norm, root_indx, axis=1
-                )  # discard root acceleration which is always zero
+                # discard root acceleration which is always zero
+                accs_norm_wo_root = np.delete(accs_norm, root_indx, axis=1)
                 accs_vec = np.reshape(accs_norm_wo_root, (new_seq_length, -1))
 
-                # create input vectors (orientation + acc)
-                # input_vec = np.concatenate((oris_vec, accs_vec), axis=1)
-
-                # create target vectors (pose + acc) after transforming poses from angle axis to rot matrix with Rodrigues
+                # convert poses to rotation matrix format if necessary
                 poses_vec = poses[nan_mask]
                 if pose2rot:
                     poses_vec_sel = np.reshape(poses_vec, (new_seq_length, -1, 3))[
@@ -232,23 +230,9 @@ class Normalizer:
                         lbs.batch_rodrigues(poses_vec_torch).detach().numpy()
                     )
                     poses_vec = np.reshape(poses_vec_rot, (new_seq_length, -1))
-                # target_vec = np.concatenate((poses_vec, accs_vec), axis=1)
-
-                # store input and target vectors for rescaling later
-                # input_data.append(input_vec)
-                # target_data.append(target_vec)
 
                 # save normalized orientations, accelerations and poses locally
                 Path(norm_dir_name).mkdir(parents=True, exist_ok=True)
-
-                # write npy files
-                # input_filename = dir_name + '/' + motion_type_i + '.input.npy'
-                # with open(input_filename, 'wb') as f:
-                #     np.save(f, input_vec)
-                #
-                # output_filename = dir_name + '/' + motion_type_i + '.target.npy'
-                # with open(output_filename, 'wb') as f:
-                #     np.save(f, target_vec)
 
                 # write npz file
                 data_out = {
@@ -286,21 +270,21 @@ class Normalizer:
                         verts.detach().numpy(),
                         joints.detach().numpy()[:, : sensors.NUM_SMPL_JOINTS],
                     )
-                    if self.sensor_config == "SSP":
+                    if self.sens_config == "SSP":
                         vertex_ids = [
                             sensors.SENS_VERTS_SSP[sensor_name]
-                            for sensor_name in self.sensor_names
+                            for sensor_name in self.sens_names
                         ]
                     else:
                         vertex_ids = [
                             sensors.SENS_VERTS_MVN[sensor_name]
-                            for sensor_name in self.sensor_names
+                            for sensor_name in self.sens_names
                         ]
 
                     vertices = [verts_np]
                     vis_sensors = [verts_np[:, vertex_ids]]
-                    orientations = [np.squeeze(oris_norm[:frames])]
-                    accelerations = [np.squeeze(accs_norm[:frames])]
+                    orientations = [np.squeeze(oris_norm_wo_root[:frames])]
+                    accelerations = [np.squeeze(accs_norm_wo_root[:frames])]
                     visualization.vis_smpl(
                         model=smpl_model,
                         vertices=vertices,
@@ -312,7 +296,7 @@ class Normalizer:
                         add_captions=False,
                     )
 
-        # print stats to console
+        # compute stats
         mean_ori = stats_ori.mean
         mean_acc = stats_acc.mean
         mean_pose = stats_pose.mean
@@ -324,28 +308,20 @@ class Normalizer:
         acc_dim = len(mean_acc)
         pose_dim = len(mean_pose)
 
-        # print('input mean: \n{} \ninput std: \n{} \ntarget mean: \n{} \ntarget std: \n{}'.format(mean_input,
-        #                                                                                          std_input,
-        #                                                                                          mean_target,
-        #                                                                                          std_target))
-
         # iterate over all normalized assets
+        # using list since it is mutable
         seq_count_train, seq_count_test, seq_count_valid = (
             [0],
             [0],
             [0],
-        )  # using list since it is mutable
-        seq_count = None
+        )
 
+        seq_count = None
         for subdir, dirs, files in os.walk(self.norm_dir):
             for file in files:
                 file_path = os.path.join(subdir, file)
                 with np.load(file_path, allow_pickle=True) as data:
                     data_dict = dict(data)
-                # input_path = os.path.join(subdir, files[0])
-                # target_path = os.path.join(subdir, files[1])
-                # input_data = np.load(input_path)
-                # target_data = np.load(target_path)
 
                 # scale data for zero mean and unit variance
                 ori_scaled = (data_dict["orientation"] - mean_ori) / std_ori
@@ -439,18 +415,6 @@ class Normalizer:
 
                 print("Processed {}/{}".format(subject_i, motion_type_i))
 
-                # DEBUG: inspect numerical values of normalized assets
-                # if motion_type_i == '75_75_01':
-                #     dir_name = os.path.join(trgt_dir, 'test_asset')
-                #     Path(dir_name).mkdir(parents=True, exist_ok=True)
-                #     input_filename = dir_name + '/' + file_id_i + '.input.npy'
-                #     with open(input_filename, 'wb') as f:
-                #         np.save(f, input_scaled)
-                #
-                #     output_filename = dir_name + '/' + file_id_i + '.target.npy'
-                #     with open(output_filename, 'wb') as f:
-                #         np.save(f, target_scaled)
-
         # save stats with dataset
         stats_dict = {
             "ori_mean": mean_ori,
@@ -469,6 +433,25 @@ class Normalizer:
         with open(stats_dir, "wb") as fout:
             np.savez_compressed(fout, **stats_dict)
 
+        # save config with dataset
+        count_conf = {
+            "total": seq_count_test[0] + seq_count_train[0] + seq_count_valid[0],
+            "training": seq_count_train[0],
+            "validation": seq_count_valid[0],
+            "test": seq_count_test[0],
+        }
+        sens_config = {
+            "config": self.sens_config,
+            "type": self.dataset_type,
+            "count": len(self.sens_names),
+            "names": self.sens_names,
+        }
+        ds_config = {
+            "assets": count_conf,
+            "dataset_sensors": sens_config,
+        }
+        utils.write_config(self.trgt_dir, ds_config)
+
         # delete directory with normalized assets
         shutil.rmtree(self.norm_dir)
 
@@ -482,13 +465,10 @@ class Normalizer:
 
 
 @hydra.main(config_path="conf", config_name="normalization")
-def get_config(cfg: DictConfig):
-    print(OmegaConf.to_yaml(cfg))
-    global config
-    config = cfg
+def do_normalization(cfg: DictConfig):
+    norm = Normalizer(cfg=dict(cfg))
+    norm.normalize_dataset()
 
 
 if __name__ == "__main__":
-    get_config()
-    norm = Normalizer(cfg=dict(config))
-    norm.normalize_dataset()
+    do_normalization()

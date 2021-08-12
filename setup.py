@@ -20,5 +20,6 @@ setup(
         "pyrender",
         "trimesh",
         "welford",
+        "webdataset",
     ],
 )
