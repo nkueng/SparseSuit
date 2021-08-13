@@ -44,6 +44,11 @@ class Trainer:
 
         # get dataset required by configuration
         src_folder = paths.AMASS_PATH
+        if cfg.debug:
+            src_folder += "_debug"
+            self.exp_name = "debug"
+            self.epochs = 1
+
         if training_params.ds_type == "synthetic":
 
             if train_sens.config == "SSP":
@@ -120,11 +125,16 @@ class Trainer:
             + "-shuff_batch"
         )
         time_stamp = datetime.datetime.now().strftime("%Y.%m.%d-%H:%M")
-        self.model_path = "./runs/" + time_stamp + experiment_name
+        self.model_path = (
+            os.path.join(os.getcwd(), "runs/") + time_stamp + experiment_name
+        )
         self.writer = SummaryWriter(self.model_path)
 
         # config saved with model
-        self.trgt_config = ds_config
+        self.trgt_config = {
+            "training": dict(cfg),
+            "dataset": dict(ds_config),
+        }
 
         # create datasets
         train_ds = (
@@ -212,7 +222,7 @@ class Trainer:
             "epochs": epoch,
             "valid_loss": best_valid_loss,
         }
-        self.trgt_config.training_stats = train_stats
+        self.trgt_config["training"]["stats"] = train_stats
         utils.write_config(self.model_path, self.trgt_config)
 
         self.writer.close()
@@ -318,6 +328,8 @@ def do_training(cfg: DictConfig):
     except KeyboardInterrupt:
         print("Interrupted. Deleting model_folder!")
         shutil.rmtree(trainer.model_path)
+
+    # evaluate model
 
 
 if __name__ == "__main__":

@@ -1,4 +1,9 @@
-experiment_name: baseline
+experiment_name: 2021.08.13-16:24-debug-SSP19-ep1-stateless-clip10-shuff_batch
+evaluation:
+  dataset_type: synthetic
+  past_frames: 20
+  future_frames: 5
+visualize: True
 training_sensors:
   config: SSP
   count: 19
@@ -28,7 +33,6 @@ train_params:
   early_stopping_tolerance: 10
   evaluate_every_step: 500
   grad_clip_norm: 10
-debug: True
 
 hydra:
   run:
