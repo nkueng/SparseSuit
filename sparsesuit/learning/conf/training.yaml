@@ -22,6 +22,7 @@ training_sensors:
     - right_ankle
 train_params:
   ds_type: synthetic
+  noise: True
   batch_size_training: 16
   max_epochs: 80
   early_stopping_tolerance: 10

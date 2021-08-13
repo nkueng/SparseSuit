@@ -26,35 +26,43 @@ np.random.seed(seed)
 class Normalizer:
     def __init__(self, cfg):
         self.config = cfg
-        self.visualize = cfg["visualize"]
-        self.dataset_type = cfg["sensors"]["type"]
-        self.sens_config = cfg["sensors"]["config"]
+        self.dataset_type = cfg.sensors.type
+        self.sens_config = cfg.sensors.config
+        self.visualize = cfg.visualize
+        self.debug = cfg.debug
 
         # choose dataset folder based on params
         if self.dataset_type == "synthetic":
+            src_folder = paths.AMASS_PATH
+            self.has_noise = cfg.sensors.acc_noise > 0
+            if self.debug:
+                src_folder += "_debug"
             if self.sens_config == "SSP":
-                src_folder = paths.AMASS_19_PATH
-                norm_folder = paths.AMASS_19_N_PATH
-                trgt_folder = paths.AMASS_19_NN_PATH
+                src_folder += "_SSP"
                 sens_names = sensors.SENS_NAMES_SSP
                 pred_trgt_joints = sensors.SMPL_SSP_JOINTS
+
             elif self.sens_config == "MVN":
-                src_folder = paths.AMASS_17_PATH
-                norm_folder = paths.AMASS_17_N_PATH
-                trgt_folder = paths.AMASS_17_NN_PATH
+                src_folder += "_MVN"
                 sens_names = sensors.SENS_NAMES_MVN
-                pred_trgt_joints = sensors.SMPL_MAJOR_JOINTS
+                pred_trgt_joints = sensors.SMPL_DIP_JOINTS
+
             else:
                 raise NameError("Invalid dataset configuration. Aborting!")
-            dataset_names = ["training", "validation", "test"]
-            sensor_ids = np.arange(0, len(sens_names))
+
             self.pred_trgt_joints = pred_trgt_joints
+            sensor_ids = np.arange(0, len(sens_names))
+
+            if self.has_noise:
+                src_folder += "_noisy"
+            self.src_dir = os.path.join(paths.DATA_PATH, src_folder)
+
+            # load config of source dataset
+            self.src_config = utils.load_config(self.src_dir)
+
         elif self.dataset_type == "real":
-            src_folder = paths.DIP_17_PATH
-            norm_folder = paths.DIP_17_N_PATH
-            trgt_folder = paths.DIP_17_NN_PATH
+            self.src_dir = os.path.join(paths.DATA_PATH, paths.DIP_17_PATH)
             # dict mapping subject and motion types to datasets
-            dataset_names = ["training", "validation", "test"]
             self.dataset_mapping = {
                 "s_09": "test",
                 "s_10": "test",
@@ -63,18 +71,19 @@ class Normalizer:
                 "s_07/04": "validation",
             }
             sens_names = sensors.SENS_NAMES_MVN
-            sensor_ids = [sensors.SENS_VERTS_MVN.index(sensor) for sensor in sens_names]
+            # change ordering of DIP to AMASS convention
+            sensor_ids = [sensors.SENS_NAMES_DIP.index(sensor) for sensor in sens_names]
+
         else:
             raise NameError("Invalid dataset configuration. Aborting!")
-        self.src_dir = os.path.join(paths.DATA_PATH, src_folder)
-        self.norm_dir = os.path.join(paths.DATA_PATH, norm_folder)
-        self.trgt_dir = os.path.join(paths.DATA_PATH, trgt_folder)
-        self.dataset_names = dataset_names
+
+        self.norm_dir = self.src_dir + "_n"
+        self.trgt_dir = self.src_dir + "_nn"
+        self.dataset_names = ["training", "validation", "test"]
         self.sens_names = sens_names
         self.sensor_ids = sensor_ids
 
     def normalize_dataset(self):
-
         assert os.path.exists(
             self.src_dir
         ), "Source directory {} does not exist! Check spelling!".format(self.src_dir)
@@ -84,11 +93,9 @@ class Normalizer:
             smpl_model = smpl_helpers.load_smplx(["neutral"])["neutral"]
 
         # set up objects for online mean and variance computation
-        stats_ori, stats_acc, stats_pose = (
-            Welford(),
-            Welford(),
-            Welford(),
-        )
+        stats_ori = Welford()
+        stats_acc = Welford()
+        stats_pose = Welford()
 
         # determine root sensor depending on sensor config
         if self.sens_config == "SSP":
@@ -109,8 +116,8 @@ class Normalizer:
         for subdir, dirs, files in os.walk(self.src_dir):
             for file in files:
                 # check for correct file format
-                if file.startswith(".") or (
-                    not file.endswith(".npz") and not file.endswith(".pkl")
+                if file.startswith(".") or not (
+                    file.endswith(".npz") or file.endswith(".pkl")
                 ):
                     continue
 
@@ -396,7 +403,9 @@ class Normalizer:
                     )
 
                 for ori_i, acc_i, pose_i in zip(ori_buffer, acc_buffer, pose_buffer):
-                    dir_name = self.trgt_dir + dataset_name + "/" + str(seq_count[0])
+                    dir_name = os.path.join(
+                        self.trgt_dir, dataset_name, str(seq_count[0])
+                    )
                     Path(dir_name).mkdir(parents=True, exist_ok=True)
                     # write npy files
                     input_filename = dir_name + "/" + file_id_i + ".ori.npy"
@@ -440,16 +449,23 @@ class Normalizer:
             "validation": seq_count_valid[0],
             "test": seq_count_test[0],
         }
+
         sens_config = {
             "config": self.sens_config,
             "type": self.dataset_type,
             "count": len(self.sens_names),
             "names": self.sens_names,
         }
+
+        if self.dataset_type == "synthetic":
+            sens_config["acc_noise"] = self.src_config.sensors.acc_noise
+            sens_config["acc_delta"] = self.src_config.sensors.acc_delta
+
         ds_config = {
             "assets": count_conf,
             "dataset_sensors": sens_config,
         }
+
         utils.write_config(self.trgt_dir, ds_config)
 
         # delete directory with normalized assets
@@ -458,7 +474,7 @@ class Normalizer:
         # convert dataset directories to .tar and delete directories
         print("Converting to .tar...")
         for dataset in self.dataset_names:
-            ds_path = self.trgt_dir + dataset
+            ds_path = os.path.join(self.trgt_dir, dataset)
             with tarfile.open(ds_path + ".tar", "w") as tar:
                 tar.add(ds_path, arcname=os.path.basename(ds_path))
             shutil.rmtree(ds_path)

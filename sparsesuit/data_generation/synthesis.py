@@ -9,38 +9,46 @@ from omegaconf import DictConfig
 from sparsesuit.constants import paths, sensors
 from sparsesuit.utils import smpl_helpers, visualization, utils
 import torch
+import torch.nn.functional as F
 from normalization import Normalizer
 
 
 class Synthesizer:
-    def __init__(
-        self,
-        cfg: dict = None,
-    ):
+    def __init__(self, cfg):
         # get params from configuration file
         self.config = cfg
-        self.white_noise = cfg["white_noise"]
-        self.add_noise = self.white_noise > 0
-        self.sens_config = cfg["sensors"]["config"]
-        self.target_fps = cfg["target_fps"]
-        self.smoothing_factor = cfg["smoothing_factor"]
-        self.visualize = cfg["visualize"]
+        self.sens_config = cfg.sensors.config
+        self.acc_delta = cfg.sensors.acc_delta
+        self.acc_noise = cfg.sensors.acc_noise
+        self.add_noise = self.acc_noise > 0
+        self.fps = cfg.fps
+        self.visualize = cfg.visualize
+        self.skip_existing = cfg.skip_existing
+        self.debug = cfg.debug
 
         # set internal params depending on config params
         self.src_dir = os.path.join(paths.DATA_PATH, paths.AMASS_PATH)
+
+        if self.debug:
+            self.src_dir += "_debug"
+
         # choose params depending on suit and sensor configuration
         if self.sens_config == "SSP":
-            target_name = paths.AMASS_19_PATH
+            target_name = self.src_dir + "_SSP"
             self.sens_names = sensors.SENS_NAMES_SSP
             self.sens_vert_ids = list(sensors.SENS_VERTS_SSP.values())
+
         elif self.sens_config == "MVN":
-            target_name = paths.AMASS_17_PATH
+            target_name = self.src_dir + "_MVN"
             self.sens_names = sensors.SENS_NAMES_MVN
             self.sens_vert_ids = list(sensors.SENS_VERTS_MVN.values())
-            if self.add_noise:
-                target_name = paths.AMASS_17_NOISY_PATH
+
         else:
             raise NameError("Invalid sensor configuration. Aborting!")
+
+        if self.add_noise:
+            target_name += "_noisy"
+
         self.trgt_dir = os.path.join(paths.DATA_PATH, target_name)
         self.joint_ids = [sensors.SENS_JOINTS_IDS[sensor] for sensor in self.sens_names]
 
@@ -71,8 +79,8 @@ class Synthesizer:
                 target_path = os.path.join(target_dir, filename)
 
                 # skip this asset, if the target_path already exists
-                if os.path.exists(target_path):
-                    print("Skipping {}.".format(file))
+                if self.skip_existing and os.path.exists(target_path):
+                    print("Skipping existing {}.".format(file))
                     asset_counter += 1
                     continue
 
@@ -86,16 +94,16 @@ class Synthesizer:
         sensor_info = {
             "config": self.sens_config,
             "type": "synthetic",
+            "acc_noise": self.acc_noise,
+            "acc_delta": self.acc_delta,
             "count": len(self.sens_names),
             "names": self.sens_names,
             "vert_ids": self.sens_vert_ids,
             "joint_ids": self.joint_ids,
-            "acc_noise": self.white_noise,
         }
         ds_config = {
             "num_assets": asset_counter,
-            "fps": self.target_fps,
-            "smoothing_factor": self.smoothing_factor,
+            "fps": self.fps,
             "sensors": sensor_info,
         }
         utils.write_config(path=self.trgt_dir, config=ds_config)
@@ -118,22 +126,25 @@ class Synthesizer:
             try:
                 fps_ori = data_in["frame_rate"]
             except KeyError:
+                print("No framerate specified. Skipping!")
                 return False
 
-        # early exit for sequences of less than 150 frames
-        if data_in["poses"].shape[0] < 150:
+        # early exit for sequences of less than 300 frames
+        if data_in["poses"].shape[0] < 300:
+            print("Fewer than 300 frames. Skipping!")
             return False
 
         data_out = {}
         # In case the original frame rates (eg 40FPS) are different from target rates (60FPS)
-        if (fps_ori % self.target_fps) == 0:
+        if (fps_ori % self.fps) == 0:
             data_out["gt"] = self.interpolation_integer(data_in["poses"], fps_ori)
         else:
             data_out["gt"] = self.interpolation(data_in["poses"], fps_ori)
 
         # skip if asset contains less than 300 frames (after synthesis)
-        frames_after = data_out["gt"].shape[0] - 2 * self.smoothing_factor
+        frames_after = data_out["gt"].shape[0] - 2 * self.acc_delta
         if frames_after < 300:
+            print("Fewer than 300 frames after synthesis. Skipping!")
             return False
 
         # limit sequences to 11000 frames (empirical)
@@ -141,41 +152,30 @@ class Synthesizer:
         #     data_out['gt'] = data_out['gt'][:11000]
 
         # simulate IMU data for given SMPL mesh and poses
-        gender = str(data_in["gender"])
-        betas = np.array(data_in["betas"][:10])
+        gender = utils.str2gender(str(data_in["gender"]))
+        if gender is None:
+            print("Gender could not be derived. Skipping!")
+            return False
         data_out["imu_ori"], data_out["imu_acc"] = self.compute_imu_data(
             gender,
-            betas,
             data_out["gt"],
-            self.target_fps,
         )
 
         # trim N pose sequences at beginning and end depending on smoothing factor N
         # and store only 24 SMPL joints
         data_out["gt"] = data_out["gt"][
-            self.smoothing_factor : -self.smoothing_factor,
+            self.acc_delta : -self.acc_delta,
             : sensors.NUM_SMPL_JOINTS * 3,
         ]
-
-        # # convert joint rotations to rotation matrices as prediction targets
-        # for fdx in range(0, len(data_out['gt'])):  # for each frame
-        #     pose_tmp = []  # np.zeros(0)
-        #     for jdx in SMPL_IDS:  # for the selected joints
-        #         tmp = data_out['gt'][fdx][jdx * 3:(jdx + 1) * 3]  # extract this joint's orientation
-        #         tmp = cv2.Rodrigues(tmp)[0].flatten().tolist()  # axis-angle to rotation matrix
-        #         pose_tmp = pose_tmp + tmp  # concatenate rotation matrices
-        #
-        #     data_out['gt'][fdx] = []
-        #     data_out['gt'][fdx] = pose_tmp
 
         with open(res_path, "wb") as fout:
             np.savez_compressed(fout, **data_out)
 
-        print(len(data_out["imu_acc"]))
+        print("Synthesized {} frames.".format(len(data_out["imu_acc"])))
         return True
 
     # Get orientation and acceleration from list of 4x4 matrices and vertices
-    def get_ori_accel(self, A, vertices_IMU, frame_rate):
+    def get_ori_accel(self, A, vertices_IMU):
         # extract IMU orientations from transformation matrices (in global frame)
         # TODO: make orientations noisy
         oris = []
@@ -190,17 +190,15 @@ class Synthesizer:
         sensor_opt = pymusim.SensorOptions()
         sensor_opt.set_gravity_axis(-1)  # disable additive gravity
         if self.add_noise:
-            sensor_opt.set_white_noise(self.white_noise)
+            sensor_opt.set_white_noise(self.acc_noise)
         sensor = pymusim.BaseSensor(sensor_opt)
 
-        time_interval = 1.0 / frame_rate * self.smoothing_factor
+        time_interval = 1.0 / self.fps * self.acc_delta
         total_number_frames = len(A)
-        for idx in range(
-            self.smoothing_factor, total_number_frames - self.smoothing_factor
-        ):
-            vertex_0 = vertices_IMU[idx - self.smoothing_factor].astype(float)  # 6*3
+        for idx in range(self.acc_delta, total_number_frames - self.acc_delta):
+            vertex_0 = vertices_IMU[idx - self.acc_delta].astype(float)  # 6*3
             vertex_1 = vertices_IMU[idx].astype(float)
-            vertex_2 = vertices_IMU[idx + self.smoothing_factor].astype(float)
+            vertex_2 = vertices_IMU[idx + self.acc_delta].astype(float)
             accel_tmp = (vertex_2 + vertex_0 - 2 * vertex_1) / (
                 time_interval * time_interval
             )
@@ -208,14 +206,9 @@ class Synthesizer:
 
             acceleration.append(accel_tmp_noisy)
 
-        return orientation[self.smoothing_factor : -self.smoothing_factor], np.asarray(
-            acceleration
-        )
+        return orientation[self.acc_delta : -self.acc_delta], np.asarray(acceleration)
 
-    def compute_imu_data(self, gender, betas, poses, frame_rate):
-
-        betas[:] = 0
-
+    def compute_imu_data(self, gender, poses):
         # use cuda if available
         # device = "cuda" if torch.cuda.is_available() else "cpu"
         # print("Using {} device".format(device))
@@ -228,24 +221,18 @@ class Synthesizer:
         num_chunks = batch_size // max_chunk_size + 1
         vertices, joints, rel_tfs = [], [], []
         for k in range(num_chunks):
-            poses_k = poses[k * max_chunk_size : (k + 1) * max_chunk_size]
+            poses_k = poses[
+                k * max_chunk_size : (k + 1) * max_chunk_size,
+                : sensors.NUM_SMPL_JOINTS * 3,
+            ]
             chunk_size = len(poses_k)
-            betas_torch = torch.zeros([chunk_size, betas.shape[0]], dtype=dtype)
+            betas_torch = torch.zeros([chunk_size, 10], dtype=dtype)
             # padding pose data for compatibility with number of smplx joints (55) required by lbs
-            zero_padding = np.zeros(
-                (
-                    chunk_size,
-                    (sensors.NUM_SMPLX_JOINTS - sensors.NUM_SMPL_JOINTS) * 3,
-                )
-            )
-            poses_padded = np.concatenate(
-                (poses_k[:, : sensors.NUM_SMPL_JOINTS * 3], zero_padding),
-                axis=1,
-            )
-            poses_torch = torch.from_numpy(poses_padded).float()
+            padding_len = sensors.NUM_SMPLX_JOINTS - sensors.NUM_SMPL_JOINTS
+            poses_torch = F.pad(torch.from_numpy(poses_k), [0, padding_len * 3])
 
             vertices_k, joints_k, rel_tfs_k = smpl_helpers.my_lbs(
-                self.smpl_models[gender], poses_torch, betas_torch
+                self.smpl_models[gender], poses_torch.float(), betas_torch
             )
 
             vertices.append(vertices_k.detach().numpy())
@@ -259,19 +246,17 @@ class Synthesizer:
         # extract 3d positions of vertices where IMUs are placed (used for acceleration of IMUs)
         imu_vertices = vertices[:, self.sens_vert_ids]
 
-        orientation, acceleration = self.get_ori_accel(
-            rel_tfs, imu_vertices, frame_rate
-        )
+        orientation, acceleration = self.get_ori_accel(rel_tfs, imu_vertices)
 
         if self.visualize:
-            vis_verts = [vertices[self.smoothing_factor : -self.smoothing_factor]]
+            vis_verts = [vertices[self.acc_delta : -self.acc_delta]]
             vis_joints = [
                 joints[
-                    self.smoothing_factor : -self.smoothing_factor,
+                    self.acc_delta : -self.acc_delta,
                     : sensors.NUM_SMPL_JOINTS,
                 ]
             ]
-            vis_sensors = [imu_vertices[self.smoothing_factor : -self.smoothing_factor]]
+            vis_sensors = [imu_vertices[self.acc_delta : -self.acc_delta]]
             visualization.vis_smpl(
                 model=self.smpl_models[gender],
                 # vertices=[np.expand_dims(model.v_template.detach().numpy(), axis=0)],  # vis ori of smpl's v_template
@@ -297,7 +282,7 @@ class Synthesizer:
     # Turn MoCap data into 60FPS
     def interpolation_integer(self, poses_ori, fps):
         poses = []
-        n_tmp = int(fps / self.target_fps)
+        n_tmp = int(fps / self.fps)
         poses_ori = poses_ori[::n_tmp]
 
         for t in poses_ori:
@@ -309,7 +294,7 @@ class Synthesizer:
         poses = []
         total_time = len(poses_ori) / fps
         times_ori = np.arange(0, total_time, 1.0 / fps)
-        times = np.arange(0, total_time, 1.0 / self.target_fps)
+        times = np.arange(0, total_time, 1.0 / self.fps)
 
         for t in times:
             index = self.findNearest(t, times_ori)
@@ -333,12 +318,11 @@ class Synthesizer:
 
 @hydra.main(config_path="conf", config_name="synthesis")
 def do_synthesis(cfg: DictConfig):
-    config = dict(cfg)
-    syn = Synthesizer(cfg=config)
+    # config = dict(cfg)
+    syn = Synthesizer(cfg=cfg)
     syn.synthesize_dataset()
 
-    config["dataset_type"] = "synthetic"
-    norm = Normalizer(cfg=config)
+    norm = Normalizer(cfg=cfg)
     norm.normalize_dataset()
 
 

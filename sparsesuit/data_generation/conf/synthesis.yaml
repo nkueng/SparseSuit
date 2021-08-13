@@ -1,8 +1,10 @@
 sensors:
   config: SSP
   type: synthetic
-white_noise: 0.00016
-target_fps: 60
-smoothing_factor: 4
-visualize: False
+  acc_delta: 4
+  acc_noise: 0.00016
+fps: 60
 smpl_genders: [male, female]
+visualize: False
+debug: False
+skip_existing: True

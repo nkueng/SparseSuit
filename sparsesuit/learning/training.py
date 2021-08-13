@@ -1,19 +1,19 @@
 import datetime
+import os
 import random
 import time
-import os
-import torch
-from tqdm import tqdm
 
-from torch.utils.data import DataLoader, Dataset
-from models import BiRNN
+import hydra
 import numpy as np
+import torch
+from omegaconf import DictConfig
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from webdataset import WebDataset
-from sparsesuit.constants import paths, sensors
+
+from models import BiRNN
+from sparsesuit.constants import paths
 from sparsesuit.utils import utils
-import hydra
-from omegaconf import DictConfig
 
 seed = 14
 random.seed(seed)
@@ -23,42 +23,50 @@ torch.manual_seed(seed)
 
 class Trainer:
     def __init__(self, cfg):
-        # TODO: change dict["keys"] to DictConfig.element notation
-        self.exp_name = cfg["experiment_name"]
-        self.train_sens = cfg["training_train_sensors"]
+        self.exp_name = cfg.experiment_name
+        self.train_sens = cfg.training_train_sensors
 
         # cuda setup
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print("Using {} device".format(self.device))
 
         # hyper-parameters
-        training_params = cfg["train_params"]
-        self.epochs = training_params["max_epochs"]
-        self.early_stop_tol = training_params["early_stopping_tolerance"]
-        self.batch_size_train = training_params["batch_size_training"]
-        self.train_eval_step = training_params["training_evaluate_every_step"]
-        self.grad_clip_norm = training_params["grad_clip_norm"]
+        training_params = cfg.train_params
+        self.epochs = training_params.max_epochs
+        self.early_stop_tol = training_params.early_stopping_tolerance
+        self.batch_size_train = training_params.batch_size_training
+        self.train_eval_step = training_params.training_evaluate_every_step
+        self.grad_clip_norm = training_params.grad_clip_norm
 
-        train_sens = cfg["training_sensors"]
-        train_sens_names = train_sens["names"]
+        train_sens = cfg.training_sensors
+        train_sens_names = train_sens.names
 
         # get dataset required by configuration
-        if training_params["ds_type"] == "synthetic":
-            if train_sens["config"] == "SSP":
-                src_dir = paths.AMASS_19_NN_PATH
-            elif train_sens["config"] == "MVN":
-                src_dir = paths.AMASS_17_NN_PATH
+        src_folder = paths.AMASS_PATH
+        if training_params.ds_type == "synthetic":
+
+            if train_sens.config == "SSP":
+                src_folder += "_SSP"
+
+            elif train_sens.config == "MVN":
+                src_folder += "_MVN"
+
             else:
                 raise NameError("Invalid configuration. Aborting!")
 
-        elif training_params["ds_type"] == "real":
-            if train_sens["config"] == "MVN":
-                src_dir = paths.DIP_17_NN_PATH
+            if train_sens.noise:
+                src_folder += "_noisy"
+
+        elif training_params.ds_type == "real":
+
+            if train_sens.config == "MVN":
+                src_folder = paths.DIP_17_NN_PATH
+
             else:
                 raise NameError("Invalid configuration. Aborting!")
 
         # get training dataset paths
-        ds_dir = os.path.join(paths.DATA_PATH, src_dir)
+        ds_dir = os.path.join(paths.DATA_PATH, src_folder)
         self.train_ds_path = os.path.join(ds_dir, paths.TRAIN_FILE)
         self.valid_ds_path = os.path.join(ds_dir, paths.VALID_FILE)
 
@@ -68,8 +76,9 @@ class Trainer:
             self.stats = dict(data)
 
         # load config of dataset
-        ds_config = utils.load_config(src_dir)
-        self.train_ds_size = ds_config.count.total
+        ds_config = utils.load_config(ds_dir)
+        self.train_ds_size = ds_config.assets.training
+        self.valid_ds_size = ds_config.assets.validation
         ds_sens = ds_config.dataset_sensors
         ds_sens_names = ds_sens.names
 
@@ -97,6 +106,7 @@ class Trainer:
         self.lr_scheduler = torch.optim.lr_scheduler.StepLR(
             optimizer=self.optimizer, step_size=1, gamma=lr_gamma
         )
+        self.step_count = 0  # count number of training steps (x-axis in tensorboard)
 
         # tensorboard setup
         experiment_name = (
@@ -121,13 +131,13 @@ class Trainer:
             WebDataset(
                 self.train_ds_path,
                 shardshuffle=True,
-                length=int(self.stats["train_len"]),
+                length=self.train_ds_size,
             )
             .decode()
             .to_tuple("ori.npy", "acc.npy", "pose.npy")
         )
         valid_ds = (
-            WebDataset(self.valid_ds_path, length=int(self.stats["valid_len"]))
+            WebDataset(self.valid_ds_path, length=self.valid_ds_size)
             .decode()
             .to_tuple("ori.npy", "acc.npy", "pose.npy")
         )
@@ -139,11 +149,9 @@ class Trainer:
         self.valid_dl = DataLoader(valid_ds)
 
     def train(self):
-
         # train and test model iteratively
-        counter = 0  # count number of training steps (x-axis in tensorboard)
-        test_loss = np.inf
-        best_test_loss = np.inf
+        valid_loss = np.inf
+        best_valid_loss = np.inf
         num_steps_wo_improvement = 0
         stop_signal = False
         t0 = time.perf_counter()
@@ -172,16 +180,16 @@ class Trainer:
 
                 # evaluate regularly
                 if counter % self.train_eval_step == 0:
-                    test_loss = self.test_model(self.valid_dl, counter)
+                    valid_loss = self.validate(self.valid_dl)
 
                     # early stopping
-                    if test_loss <= best_test_loss:
+                    if valid_loss <= best_valid_loss:
                         # save model
                         print("\nSaving model.")
                         torch.save(
                             self.model.state_dict(), self.model_path + "/checkpoint.pt"
                         )
-                        best_test_loss = test_loss
+                        best_valid_loss = valid_loss
                         num_steps_wo_improvement = 0
                     else:
                         num_steps_wo_improvement += 1
@@ -198,7 +206,7 @@ class Trainer:
         print("Done in {} seconds!".format(t1 - t0))
         self.writer.close()
 
-    def training_step(self, batch_num, x, y, batch_counter):
+    def training_step(self, batch_num, x, y):
         self.model.train()
 
         x, y = x.to(self.device).float(), y.to(self.device).float()
@@ -229,7 +237,7 @@ class Trainer:
         self.optimizer.step()
 
         # tensorboard logging
-        self.log_loss(loss.item(), loss_smpl, loss_acc, batch_counter, "training")
+        self.log_loss(loss.item(), loss_smpl, loss_acc, "training")
 
     def eval_loss(self, pred, y, sample):
         # evaluate smpl parameters and accelerometer predictions separately
@@ -256,14 +264,13 @@ class Trainer:
 
         return loss, loss_smpl.item(), loss_acc.item()
 
-    def log_loss(self, loss, loss_smpl, loss_acc, counter, mode: str):
+    def log_loss(self, loss, loss_smpl, loss_acc, mode: str):
         # tensorboard logging
-        self.writer.add_scalar(mode + "/smpl_loss", loss_smpl, counter)
-        self.writer.add_scalar(mode + "/acc_loss", loss_acc, counter)
-        self.writer.add_scalar(mode + "/loss", loss, counter)
+        self.writer.add_scalar(mode + "/smpl_loss", loss_smpl, self.step_count)
+        self.writer.add_scalar(mode + "/acc_loss", loss_acc, self.step_count)
+        self.writer.add_scalar(mode + "/loss", loss, self.step_count)
 
-    def test_model(self, step_counter):
-        dataset_size = len(self.valid_dl.dataset)
+    def validate(self):
         self.model.eval()
         loss = 0
         loss_smpl = 0
@@ -279,24 +286,22 @@ class Trainer:
                     target_vec.to(self.device).float(),
                 )
                 pred = self.model(x)
-                loss_i, loss_smpl_i, loss_acc_i = self.eval_loss(
-                    self.loss_fn, pred, y, sample
-                )
+                loss_i, loss_smpl_i, loss_acc_i = self.eval_loss(pred, y, sample)
                 loss += loss_i.item()
                 loss_smpl += loss_smpl_i
                 loss_acc += loss_acc_i
 
         # tensorboard logging
-        loss /= dataset_size
-        loss_smpl /= dataset_size
-        loss_acc /= dataset_size
-        self.log_loss(loss, loss_smpl, loss_acc, step_counter, "testing")
+        loss /= self.valid_ds_size
+        loss_smpl /= self.valid_ds_size
+        loss_acc /= self.valid_ds_size
+        self.log_loss(loss, loss_smpl, loss_acc, "testing")
         return loss
 
 
 @hydra.main(config_path="conf", config_name="training")
 def do_training(cfg: DictConfig):
-    trainer = Trainer(cfg=dict(cfg))
+    trainer = Trainer(cfg=cfg)
     trainer.train()
 
 

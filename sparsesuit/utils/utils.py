@@ -17,6 +17,18 @@ def load_config(path):
     return OmegaConf.load(conf_file)
 
 
+def str2gender(string):
+    genders = ["female", "male", "neutral"]
+    if string in genders:
+        return string
+    else:
+        for gender in genders:
+            if gender in string:
+                return gender
+
+    return None
+
+
 def aa_to_rot_matrix(data):
     """
     Converts the orientation data to represent angle axis as rotation matrices. `data` is expected in format
