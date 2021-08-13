@@ -3,6 +3,7 @@ import quaternion
 import cv2
 import os
 from omegaconf import OmegaConf
+import torch
 
 
 def write_config(path, config):

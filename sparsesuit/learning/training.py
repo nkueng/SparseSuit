@@ -1,6 +1,7 @@
 import datetime
 import os
 import random
+import shutil
 import time
 
 import hydra
@@ -24,7 +25,6 @@ torch.manual_seed(seed)
 class Trainer:
     def __init__(self, cfg):
         self.exp_name = cfg.experiment_name
-        self.train_sens = cfg.training_train_sensors
 
         # cuda setup
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -34,12 +34,13 @@ class Trainer:
         training_params = cfg.train_params
         self.epochs = training_params.max_epochs
         self.early_stop_tol = training_params.early_stopping_tolerance
-        self.batch_size_train = training_params.batch_size_training
-        self.train_eval_step = training_params.training_evaluate_every_step
+        self.batch_size_train = training_params.batch_size
+        self.train_eval_step = training_params.evaluate_every_step
         self.grad_clip_norm = training_params.grad_clip_norm
 
         train_sens = cfg.training_sensors
         train_sens_names = train_sens.names
+        num_train_sens = train_sens.count
 
         # get dataset required by configuration
         src_folder = paths.AMASS_PATH
@@ -54,8 +55,9 @@ class Trainer:
             else:
                 raise NameError("Invalid configuration. Aborting!")
 
-            if train_sens.noise:
+            if training_params.noise:
                 src_folder += "_noisy"
+            src_folder += "_nn"
 
         elif training_params.ds_type == "real":
 
@@ -70,26 +72,21 @@ class Trainer:
         self.train_ds_path = os.path.join(ds_dir, paths.TRAIN_FILE)
         self.valid_ds_path = os.path.join(ds_dir, paths.VALID_FILE)
 
-        # get dataset statistics
-        stats_path = os.path.join(ds_dir, "stats.npz")
-        with np.load(stats_path, allow_pickle=True) as data:
-            self.stats = dict(data)
-
         # load config of dataset
         ds_config = utils.load_config(ds_dir)
         self.train_ds_size = ds_config.assets.training
         self.valid_ds_size = ds_config.assets.validation
-        ds_sens = ds_config.dataset_sensors
-        ds_sens_names = ds_sens.names
+        ds_sens_names = ds_config.dataset_sensors.names
+        num_trgt_joints = len(ds_config.dataset_sensors.target_joints)
 
         # find indices of training sensors in dataset vectors
         self.sens_ind = [ds_sens_names.index(sens) for sens in train_sens_names]
 
         # derive input/output dimension of network from choice of train_sens_names
-        num_train_sensors = len(train_sens_names)
-        ori_dim = num_train_sensors * 9
-        acc_dim = num_train_sensors * 3
-        pose_dim = len(train_sens_names.SMPL_SSP_JOINTS) * 9
+        num_input_sens = len(train_sens_names)
+        ori_dim = num_input_sens * 9
+        acc_dim = num_input_sens * 3
+        pose_dim = num_trgt_joints * 9
 
         input_dim = ori_dim + acc_dim
         target_dim = pose_dim + acc_dim
@@ -112,9 +109,9 @@ class Trainer:
         experiment_name = (
             "-"
             + str(self.exp_name)
-            + "-sens"
-            + str(num_train_sensors + 1)
-            + "-sym_in"
+            + "-"
+            + train_sens.config
+            + str(num_train_sens)
             + "-ep"
             + str(self.epochs)
             + "-stateless"
@@ -123,8 +120,11 @@ class Trainer:
             + "-shuff_batch"
         )
         time_stamp = datetime.datetime.now().strftime("%Y.%m.%d-%H:%M")
-        self.model_path = "./../runs/" + time_stamp + experiment_name
+        self.model_path = "./runs/" + time_stamp + experiment_name
         self.writer = SummaryWriter(self.model_path)
+
+        # config saved with model
+        self.trgt_config = ds_config
 
         # create datasets
         train_ds = (
@@ -155,6 +155,7 @@ class Trainer:
         num_steps_wo_improvement = 0
         stop_signal = False
         t0 = time.perf_counter()
+
         # iterate over epochs
         for epoch in range(self.epochs):
             print(f"\nEpoch {epoch + 1}\n-------------------------------")
@@ -168,19 +169,17 @@ class Trainer:
                     batch_num,
                     input_vec,
                     target_vec,
-                    counter,
                 )
                 self.lr_scheduler.step()
                 self.writer.add_scalar(
                     "training/learning_rate",
                     self.lr_scheduler.get_last_lr()[0],
-                    counter,
                 )
-                counter += 1
+                self.step_count += 1
 
                 # evaluate regularly
-                if counter % self.train_eval_step == 0:
-                    valid_loss = self.validate(self.valid_dl)
+                if self.step_count % self.train_eval_step == 0:
+                    valid_loss = self.validate()
 
                     # early stopping
                     if valid_loss <= best_valid_loss:
@@ -203,7 +202,19 @@ class Trainer:
                 break
 
         t1 = time.perf_counter()
-        print("Done in {} seconds!".format(t1 - t0))
+        t_delta = t1 - t0
+        print("Done in {} seconds!".format(t_delta))
+
+        # dump config with training stats
+        train_stats = {
+            "duration": t_delta,
+            "steps": self.step_count,
+            "epochs": epoch,
+            "valid_loss": best_valid_loss,
+        }
+        self.trgt_config.training_stats = train_stats
+        utils.write_config(self.model_path, self.trgt_config)
+
         self.writer.close()
 
     def training_step(self, batch_num, x, y):
@@ -301,8 +312,12 @@ class Trainer:
 
 @hydra.main(config_path="conf", config_name="training")
 def do_training(cfg: DictConfig):
-    trainer = Trainer(cfg=cfg)
-    trainer.train()
+    try:
+        trainer = Trainer(cfg=cfg)
+        trainer.train()
+    except KeyboardInterrupt:
+        print("Interrupted. Deleting model_folder!")
+        shutil.rmtree(trainer.model_path)
 
 
 if __name__ == "__main__":

@@ -34,6 +34,7 @@ class BiRNN(nn.Module):
             p=0.2
         )  # module is more convenient than functional, turns off automatically in eval()
         self.fc1 = nn.Linear(in_features=input_dim, out_features=hidden_dim)
+        self.relu = nn.ReLU()
         self.lstm = nn.LSTM(
             input_size=hidden_dim,
             hidden_size=hidden_dim,
@@ -51,8 +52,7 @@ class BiRNN(nn.Module):
     def forward(self, x, h_last=None, c_last=None):
         out = self.dropout(x)
         out = self.fc1(out)
-        # TODO: check if inplace=True is problematic here
-        self.relu(out)
+        out = self.relu(out)
         # states are init as zero if not provided
         if h_last is None:
             h_last, c_last = self.init_hidden(x.shape[0])

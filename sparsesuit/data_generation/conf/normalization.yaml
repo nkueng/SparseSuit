@@ -2,3 +2,10 @@ sensors:
   config: SSP
   type: synthetic
 visualize: False
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+defaults:
+  - override hydra/job_logging: disabled

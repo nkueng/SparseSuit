@@ -18,7 +18,7 @@ from sparsesuit.utils import visualization, smpl_helpers, utils
 import hydra
 from omegaconf import DictConfig
 
-# fix seed for re-producability
+# fix seed for reproducibility
 seed = 14
 np.random.seed(seed)
 
@@ -81,6 +81,7 @@ class Normalizer:
         self.trgt_dir = self.src_dir + "_nn"
         self.dataset_names = ["training", "validation", "test"]
         self.sens_names = sens_names
+        self.num_train_sens = len(sens_names)
         self.sensor_ids = sensor_ids
 
     def normalize_dataset(self):
@@ -451,10 +452,11 @@ class Normalizer:
         }
 
         sens_config = {
-            "config": self.sens_config,
             "type": self.dataset_type,
-            "count": len(self.sens_names),
+            "config": self.sens_config,
+            "count": self.num_train_sens,
             "names": self.sens_names,
+            "target_joints": self.pred_trgt_joints,
         }
 
         if self.dataset_type == "synthetic":
@@ -482,7 +484,7 @@ class Normalizer:
 
 @hydra.main(config_path="conf", config_name="normalization")
 def do_normalization(cfg: DictConfig):
-    norm = Normalizer(cfg=dict(cfg))
+    norm = Normalizer(cfg=cfg)
     norm.normalize_dataset()
 
 

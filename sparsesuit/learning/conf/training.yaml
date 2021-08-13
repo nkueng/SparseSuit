@@ -1,7 +1,7 @@
 experiment_name: baseline
 training_sensors:
   config: SSP
-  count: 17
+  count: 19
   names:
     - left_back
     - right_back
@@ -23,8 +23,15 @@ training_sensors:
 train_params:
   ds_type: synthetic
   noise: True
-  batch_size_training: 16
+  batch_size: 16
   max_epochs: 80
   early_stopping_tolerance: 10
-  training_evaluate_every_step: 500
+  evaluate_every_step: 500
   grad_clip_norm: 10
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+defaults:
+  - override hydra/job_logging: disabled

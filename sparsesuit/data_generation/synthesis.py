@@ -318,7 +318,6 @@ class Synthesizer:
 
 @hydra.main(config_path="conf", config_name="synthesis")
 def do_synthesis(cfg: DictConfig):
-    # config = dict(cfg)
     syn = Synthesizer(cfg=cfg)
     syn.synthesize_dataset()
 

@@ -8,3 +8,10 @@ smpl_genders: [male, female]
 visualize: False
 debug: False
 skip_existing: True
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+defaults:
+  - override hydra/job_logging: disabled
