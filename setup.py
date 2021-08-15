@@ -14,7 +14,6 @@ setup(
         "numpy",
         "torch",
         "tensorboard>=1.14.0",
-        "procrustes",
         "hydra-core",
         "smplx",
         "pyrender",

@@ -1,8 +1,8 @@
-experiment_name: baseline
-training_sensors:
+training:
+  experiment_name: baseline
   config: SSP
   count: 19
-  names:
+  sensors:
     - left_back
     - right_back
     - left_collar
@@ -20,8 +20,7 @@ training_sensors:
     - right_knee
     - left_ankle
     - right_ankle
-train_params:
-  ds_type: synthetic
+  dataset: synthetic
   noise: True
   batch_size: 16
   max_epochs: 80

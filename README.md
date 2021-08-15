@@ -20,4 +20,11 @@ mkdir build && cd build
 cmake ..
 pip install ninja
 pip install -e .
+cd ../..
+
+# install procrustes
+git clone git@github.com:theochem/procrustes.git
+cd procrustes
+pip install .
+
 ```

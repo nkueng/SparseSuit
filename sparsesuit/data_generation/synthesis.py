@@ -15,13 +15,16 @@ from normalization import Normalizer
 
 class Synthesizer:
     def __init__(self, cfg):
-        # get params from configuration file
         self.config = cfg
+        
+        # synthesis parameters
         self.sens_config = cfg.sensors.config
         self.acc_delta = cfg.sensors.acc_delta
         self.acc_noise = cfg.sensors.acc_noise
         self.add_noise = self.acc_noise > 0
         self.fps = cfg.fps
+        
+        # run parameters
         self.visualize = cfg.visualize
         self.skip_existing = cfg.skip_existing
         self.debug = cfg.debug
@@ -55,8 +58,9 @@ class Synthesizer:
         # load SMPL model(s)
         self.smpl_models = smpl_helpers.load_smplx(cfg["smpl_genders"])
 
+        self.asset_counter = 0
+
     def synthesize_dataset(self):
-        asset_counter = 0
         for subdir, dirs, files in os.walk(self.src_dir):
             for file in files:
                 if file.startswith("."):
@@ -81,30 +85,33 @@ class Synthesizer:
                 # skip this asset, if the target_path already exists
                 if self.skip_existing and os.path.exists(target_path):
                     print("Skipping existing {}.".format(file))
-                    asset_counter += 1
+                    self.asset_counter += 1
                     continue
 
                 # synthesize sensor data from this motion asset
                 Path(target_dir).mkdir(parents=True, exist_ok=True)
                 print("Synthesizing {}.".format(file))
                 if self.synthesize_asset(file_path, target_path):
-                    asset_counter += 1
+                    self.asset_counter += 1
 
+        self.write_config()
+        
+    def write_config(self):
         # save configuration file for synthetic dataset
-        sensor_info = {
+        dataset_info = {
+            "num_assets": self.asset_counter,
             "config": self.sens_config,
             "type": "synthetic",
+            "fps": self.fps,
             "acc_noise": self.acc_noise,
             "acc_delta": self.acc_delta,
             "count": len(self.sens_names),
-            "names": self.sens_names,
+            "sensors": self.sens_names,
             "vert_ids": self.sens_vert_ids,
             "joint_ids": self.joint_ids,
         }
         ds_config = {
-            "num_assets": asset_counter,
-            "fps": self.fps,
-            "sensors": sensor_info,
+            "dataset": dataset_info,
         }
         utils.write_config(path=self.trgt_dir, config=ds_config)
 

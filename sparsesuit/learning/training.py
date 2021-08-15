@@ -24,71 +24,71 @@ torch.manual_seed(seed)
 
 class Trainer:
     def __init__(self, cfg):
-        self.exp_name = cfg.experiment_name
+        self.cfg = cfg
 
         # cuda setup
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print("Using {} device".format(self.device))
 
         # hyper-parameters
-        training_params = cfg.train_params
-        self.epochs = training_params.max_epochs
-        self.early_stop_tol = training_params.early_stopping_tolerance
-        self.batch_size_train = training_params.batch_size
-        self.train_eval_step = training_params.evaluate_every_step
-        self.grad_clip_norm = training_params.grad_clip_norm
+        train_config = cfg.training
+        self.exp_name = train_config.experiment_name
+        self.epochs = train_config.max_epochs
+        self.early_stop_tol = train_config.early_stopping_tolerance
+        self.batch_size_train = train_config.batch_size
+        self.train_eval_step = train_config.evaluate_every_step
+        self.grad_clip_norm = train_config.grad_clip_norm
 
-        train_sens = cfg.training_sensors
-        train_sens_names = train_sens.names
-        num_train_sens = train_sens.count
+        train_sens = train_config.sensors
+        num_train_sens = train_config.count
 
         # get dataset required by configuration
-        src_folder = paths.AMASS_PATH
+        ds_folder = paths.AMASS_PATH
         if cfg.debug:
-            src_folder += "_debug"
+            ds_folder += "_debug"
             self.exp_name = "debug"
             self.epochs = 1
 
-        if training_params.ds_type == "synthetic":
+        if train_config.dataset_type == "synthetic":
 
-            if train_sens.config == "SSP":
-                src_folder += "_SSP"
+            if train_config.config == "SSP":
+                ds_folder += "_SSP"
 
-            elif train_sens.config == "MVN":
-                src_folder += "_MVN"
-
-            else:
-                raise NameError("Invalid configuration. Aborting!")
-
-            if training_params.noise:
-                src_folder += "_noisy"
-            src_folder += "_nn"
-
-        elif training_params.ds_type == "real":
-
-            if train_sens.config == "MVN":
-                src_folder = paths.DIP_17_NN_PATH
+            elif train_config.config == "MVN":
+                ds_folder += "_MVN"
 
             else:
                 raise NameError("Invalid configuration. Aborting!")
 
-        # get training dataset paths
-        ds_dir = os.path.join(paths.DATA_PATH, src_folder)
+            if train_config.noise:
+                ds_folder += "_noisy"
+            ds_folder += "_nn"
+
+        elif train_config.dataset_type == "real":
+
+            if train_config.config == "MVN":
+                ds_folder = paths.DIP_17_NN_PATH
+
+            else:
+                raise NameError("Invalid configuration. Aborting!")
+
+        # get training and validation dataset paths
+        ds_dir = os.path.join(paths.DATA_PATH, ds_folder)
         self.train_ds_path = os.path.join(ds_dir, paths.TRAIN_FILE)
         self.valid_ds_path = os.path.join(ds_dir, paths.VALID_FILE)
 
         # load config of dataset
-        ds_config = utils.load_config(ds_dir)
-        self.train_ds_size = ds_config.assets.training
-        self.valid_ds_size = ds_config.assets.validation
-        ds_sens_names = ds_config.dataset_sensors.names
-        num_trgt_joints = len(ds_config.dataset_sensors.target_joints)
+        self.ds_config = utils.load_config(ds_dir).dataset
+        self.train_ds_size = self.ds_config.assets.training
+        self.valid_ds_size = self.ds_config.assets.validation
+        ds_sens = self.ds_config.sensors
+        num_trgt_joints = len(self.ds_config.pred_trgt_joints)
 
         # find indices of training sensors in dataset vectors
-        self.sens_ind = [ds_sens_names.index(sens) for sens in train_sens_names]
+        self.sens_ind = [ds_sens.index(sens) for sens in train_sens]
 
-        # derive input/output dimension of network from choice of train_sens_names
-        num_input_sens = len(train_sens_names)
+        # derive input/output dimension of network from choice of train_sens
+        num_input_sens = len(train_sens)
         ori_dim = num_input_sens * 9
         acc_dim = num_input_sens * 3
         pose_dim = num_trgt_joints * 9
@@ -112,29 +112,23 @@ class Trainer:
 
         # tensorboard setup
         experiment_name = (
-            "-"
-            + str(self.exp_name)
-            + "-"
-            + train_sens.config
-            + str(num_train_sens)
-            + "-ep"
-            + str(self.epochs)
-            + "-stateless"
-            + "-clip"
-            + str(self.grad_clip_norm)
-            + "-shuff_batch"
+                "-"
+                + str(self.exp_name)
+                + "-"
+                + train_sens.config
+                + str(num_train_sens)
+                + "-ep"
+                + str(self.epochs)
+                + "-stateless"
+                + "-clip"
+                + str(self.grad_clip_norm)
+                + "-shuff_batch"
         )
         time_stamp = datetime.datetime.now().strftime("%Y.%m.%d-%H:%M")
         self.model_path = (
-            os.path.join(os.getcwd(), "runs/") + time_stamp + experiment_name
+                os.path.join(os.getcwd(), "runs/") + time_stamp + experiment_name
         )
         self.writer = SummaryWriter(self.model_path)
-
-        # config saved with model
-        self.trgt_config = {
-            "training": dict(cfg),
-            "dataset": dict(ds_config),
-        }
 
         # create datasets
         train_ds = (
@@ -143,13 +137,13 @@ class Trainer:
                 shardshuffle=True,
                 length=self.train_ds_size,
             )
-            .decode()
-            .to_tuple("ori.npy", "acc.npy", "pose.npy")
+                .decode()
+                .to_tuple("ori.npy", "acc.npy", "pose.npy")
         )
         valid_ds = (
             WebDataset(self.valid_ds_path, length=self.valid_ds_size)
-            .decode()
-            .to_tuple("ori.npy", "acc.npy", "pose.npy")
+                .decode()
+                .to_tuple("ori.npy", "acc.npy", "pose.npy")
         )
 
         # create specific dataloaders for training (batched sequences) and testing (unrolled sequences)
@@ -168,7 +162,7 @@ class Trainer:
 
         # iterate over epochs
         for epoch in range(self.epochs):
-            print(f"\nEpoch {epoch + 1}\n-------------------------------")
+            print("Epoch {}\n-------------------------------".format(epoch + 1))
 
             # iterate over all sample batches in epoch
             for batch_num, (ori, acc, pose) in enumerate(self.train_dl):
@@ -212,20 +206,28 @@ class Trainer:
                 break
 
         t1 = time.perf_counter()
-        t_delta = t1 - t0
-        print("Done in {} seconds!".format(t_delta))
+        duration = t1 - t0
+        print("Done in {} seconds!".format(duration))
 
-        # dump config with training stats
-        train_stats = {
-            "duration": t_delta,
-            "steps": self.step_count,
-            "epochs": epoch,
-            "valid_loss": best_valid_loss,
-        }
-        self.trgt_config["training"]["stats"] = train_stats
-        utils.write_config(self.model_path, self.trgt_config)
+        self.write_config(duration, epoch, best_valid_loss)
 
         self.writer.close()
+
+    def write_config(self, duration, epoch, best_valid_loss):
+        # load training configuration
+        train_config = self.cfg.training
+
+        # add stats
+        train_config.duration = duration
+        train_config.steps = self.step_count
+        train_config.epochs = epoch
+        train_config.best_valid_loss = best_valid_loss
+
+        # compile target config to dump with model checkpoint
+        trgt_config = self.ds_config
+        trgt_config.training = train_config
+
+        utils.write_config(path=self.model_path, config=trgt_config)
 
     def training_step(self, batch_num, x, y):
         self.model.train()
@@ -280,7 +282,8 @@ class Trainer:
         # terminal output
         current = (sample + 1) * len(y)
         print(
-            f"{sample}. SMPL loss: {loss_smpl:>7f}, ACC loss: {loss_acc:>7f} [{current:>5d}/{self.train_ds_size:>5d}]"
+            "{}. SMPL loss: {:.3f}, ACC loss: {:.3f} [{}/{}]".format(sample, loss_smpl, loss_acc, current,
+                                                                     self.train_ds_size)
         )
 
         return loss, loss_smpl.item(), loss_acc.item()
@@ -329,7 +332,7 @@ def do_training(cfg: DictConfig):
         print("Interrupted. Deleting model_folder!")
         shutil.rmtree(trainer.model_path)
 
-    # evaluate model
+    # TODO: evaluate model
 
 
 if __name__ == "__main__":

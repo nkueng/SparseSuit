@@ -1,10 +1,11 @@
+import numpy as np
 import smplx
 from smplx import lbs
 import os
 
 import torch
 
-from sparsesuit.constants import paths
+from sparsesuit.constants import paths, sensors
 
 
 def load_smplx(genders: list = None) -> dict:
@@ -20,7 +21,7 @@ def load_smplx(genders: list = None) -> dict:
 
 
 def my_lbs(
-    model: smplx.SMPLX, pose: torch.Tensor, betas: torch.Tensor, pose2rot: bool = True
+        model: smplx.SMPLX, pose: torch.Tensor, betas: torch.Tensor, pose2rot: bool = True
 ):
     """Performs Linear Blend Skinning with the given shape and pose parameters
 
@@ -118,3 +119,60 @@ def my_lbs(
     verts = v_homo[:, :, :3, 0]
 
     return verts, joints_transf, rel_tfs
+
+
+def smpl_reduced_to_full(smpl_reduced):
+    """
+    Converts an np array that uses the reduced smpl representation (15) into the full representation (24) by filling in
+    the identity rotation for the missing joints. Can handle either rotation input (dof = 9) or quaternion input
+    (dof = 4).
+    :param smpl_full: An np array of shape (seq_length, n_joints_reduced*dof)
+    :return: An np array of shape (seq_length, 24*dof)
+    """
+    # TODO: make hands look nice (relaxed)
+    dof = smpl_reduced.shape[1] // len(sensors.SMPL_SSP_JOINTS)
+    assert dof == 9 or dof == 4
+    seq_length = smpl_reduced.shape[0]
+    smpl_full = np.zeros([seq_length, sensors.NUM_SMPL_JOINTS * dof])
+    for idx in range(sensors.NUM_SMPL_JOINTS):
+        if idx in sensors.SMPL_MAJOR_JOINTS:
+            red_idx = sensors.SMPL_MAJOR_JOINTS.index(idx)
+            smpl_full[:, idx * dof:(idx + 1) * dof] = smpl_reduced[:, red_idx * dof:(red_idx + 1) * dof]
+        else:
+            if dof == 9:
+                identity = np.repeat(np.eye(3, 3)[np.newaxis, ...], seq_length, axis=0)
+            else:
+                identity = np.concatenate([np.array([[1.0, 0.0, 0.0, 0.0]])] * seq_length, axis=0)
+            smpl_full[:, idx * dof:(idx + 1) * dof] = np.reshape(identity, [-1, dof])
+    return smpl_full
+
+
+def smpl_rot_to_global(smpl_rotations_local):
+    """
+    Converts local smpl rotations into global rotations by "unrolling" the kinematic chain.
+    :param smpl_rotations_local: np array of rotation matrices of shape (..., N, 3, 3), or (..., 216) where N
+      corresponds to the amount of joints in SMPL (currently 24)
+    :return: The global rotations as an np array of the same shape as the input.
+    """
+    in_shape = smpl_rotations_local.shape
+    do_reshape = in_shape[-1] != 3
+    if do_reshape:
+        assert in_shape[-1] == 216
+        rots = np.reshape(smpl_rotations_local, in_shape[:-1] + (sensors.NUM_SMPL_JOINTS, 3, 3))
+    else:
+        rots = smpl_rotations_local
+
+    out = np.zeros_like(rots)
+    dof = rots.shape[-3]
+    for j in range(dof):
+        if sensors.SMPL_PARENTS[j] < 0:
+            out[..., j, :, :] = rots[..., j, :, :]
+        else:
+            parent_rot = out[..., sensors.SMPL_PARENTS[j], :, :]
+            local_rot = rots[..., j, :, :]
+            out[..., j, :, :] = np.matmul(parent_rot, local_rot)
+
+    if do_reshape:
+        out = np.reshape(out, in_shape)
+
+    return out

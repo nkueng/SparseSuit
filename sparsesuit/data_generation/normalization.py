@@ -26,39 +26,35 @@ np.random.seed(seed)
 class Normalizer:
     def __init__(self, cfg):
         self.config = cfg
-        self.dataset_type = cfg.sensors.type
-        self.sens_config = cfg.sensors.config
+        self.dataset_type = cfg.dataset.type
+        self.sens_config = cfg.dataset.config
         self.visualize = cfg.visualize
         self.debug = cfg.debug
 
         # choose dataset folder based on params
         if self.dataset_type == "synthetic":
             src_folder = paths.AMASS_PATH
-            self.has_noise = cfg.sensors.acc_noise > 0
+            self.has_noise = cfg.dataset.acc_noise > 0
             if self.debug:
                 src_folder += "_debug"
             if self.sens_config == "SSP":
                 src_folder += "_SSP"
                 sens_names = sensors.SENS_NAMES_SSP
-                pred_trgt_joints = sensors.SMPL_SSP_JOINTS
+                self.pred_trgt_joints = sensors.SMPL_SSP_JOINTS
 
             elif self.sens_config == "MVN":
                 src_folder += "_MVN"
                 sens_names = sensors.SENS_NAMES_MVN
-                pred_trgt_joints = sensors.SMPL_DIP_JOINTS
+                self.pred_trgt_joints = sensors.SMPL_DIP_JOINTS
 
             else:
                 raise NameError("Invalid dataset configuration. Aborting!")
 
-            self.pred_trgt_joints = pred_trgt_joints
             sensor_ids = np.arange(0, len(sens_names))
 
             if self.has_noise:
                 src_folder += "_noisy"
             self.src_dir = os.path.join(paths.DATA_PATH, src_folder)
-
-            # load config of source dataset
-            self.src_config = utils.load_config(self.src_dir)
 
         elif self.dataset_type == "real":
             self.src_dir = os.path.join(paths.DATA_PATH, paths.DIP_17_PATH)
@@ -81,7 +77,6 @@ class Normalizer:
         self.trgt_dir = self.src_dir + "_nn"
         self.dataset_names = ["training", "validation", "test"]
         self.sens_names = sens_names
-        self.num_train_sens = len(sens_names)
         self.sensor_ids = sensor_ids
 
     def normalize_dataset(self):
@@ -227,10 +222,12 @@ class Normalizer:
 
                 # convert poses to rotation matrix format if necessary
                 poses_vec = poses[nan_mask]
+                # TODO: what about pred_trgt_joints if pose2rot is False
                 if pose2rot:
+                    # select target joints
                     poses_vec_sel = np.reshape(poses_vec, (new_seq_length, -1, 3))[
                         :, self.pred_trgt_joints
-                    ]  # select target joints
+                    ]
                     poses_vec_torch = torch.from_numpy(
                         np.reshape(poses_vec_sel, (-1, 3))
                     )
@@ -444,31 +441,7 @@ class Normalizer:
             np.savez_compressed(fout, **stats_dict)
 
         # save config with dataset
-        count_conf = {
-            "total": seq_count_test[0] + seq_count_train[0] + seq_count_valid[0],
-            "training": seq_count_train[0],
-            "validation": seq_count_valid[0],
-            "test": seq_count_test[0],
-        }
-
-        sens_config = {
-            "type": self.dataset_type,
-            "config": self.sens_config,
-            "count": self.num_train_sens,
-            "names": self.sens_names,
-            "target_joints": self.pred_trgt_joints,
-        }
-
-        if self.dataset_type == "synthetic":
-            sens_config["acc_noise"] = self.src_config.sensors.acc_noise
-            sens_config["acc_delta"] = self.src_config.sensors.acc_delta
-
-        ds_config = {
-            "assets": count_conf,
-            "dataset_sensors": sens_config,
-        }
-
-        utils.write_config(self.trgt_dir, ds_config)
+        self.write_config(seq_count_train[0], seq_count_valid[0], seq_count_test[0])
 
         # delete directory with normalized assets
         shutil.rmtree(self.norm_dir)
@@ -480,6 +453,25 @@ class Normalizer:
             with tarfile.open(ds_path + ".tar", "w") as tar:
                 tar.add(ds_path, arcname=os.path.basename(ds_path))
             shutil.rmtree(ds_path)
+
+    def write_config(self, train_count, valid_count, test_count):
+        # load config of source dataset
+        src_config = utils.load_config(self.src_dir)
+
+        # compile info about asset counts
+        asset_info = {
+            "total": train_count + valid_count + test_count,
+            "training": train_count,
+            "validation": valid_count,
+            "test": test_count,
+        }
+
+        # update source dataset config
+        src_config.dataset.assets = asset_info
+        src_config.dataset.pred_trgt_joints = self.pred_trgt_joints
+
+        # dump updated config to normalized dataset
+        utils.write_config(self.trgt_dir, src_config)
 
 
 @hydra.main(config_path="conf", config_name="normalization")
