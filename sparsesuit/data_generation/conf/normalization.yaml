@@ -1,7 +1,9 @@
-sensors:
+dataset:
   config: SSP
   type: synthetic
+  noise: True
 visualize: False
+debug: True
 
 hydra:
   run:

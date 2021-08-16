@@ -21,7 +21,7 @@ def load_smplx(genders: list = None) -> dict:
 
 
 def my_lbs(
-        model: smplx.SMPLX, pose: torch.Tensor, betas: torch.Tensor, pose2rot: bool = True
+    model: smplx.SMPLX, pose: torch.Tensor, betas: torch.Tensor, pose2rot: bool = True
 ):
     """Performs Linear Blend Skinning with the given shape and pose parameters
 
@@ -121,7 +121,7 @@ def my_lbs(
     return verts, joints_transf, rel_tfs
 
 
-def smpl_reduced_to_full(smpl_reduced):
+def smpl_reduced_to_full(smpl_reduced, target_joints):
     """
     Converts an np array that uses the reduced smpl representation (15) into the full representation (24) by filling in
     the identity rotation for the missing joints. Can handle either rotation input (dof = 9) or quaternion input
@@ -130,20 +130,24 @@ def smpl_reduced_to_full(smpl_reduced):
     :return: An np array of shape (seq_length, 24*dof)
     """
     # TODO: make hands look nice (relaxed)
-    dof = smpl_reduced.shape[1] // len(sensors.SMPL_SSP_JOINTS)
+    dof = smpl_reduced.shape[1] // len(target_joints)
     assert dof == 9 or dof == 4
     seq_length = smpl_reduced.shape[0]
     smpl_full = np.zeros([seq_length, sensors.NUM_SMPL_JOINTS * dof])
     for idx in range(sensors.NUM_SMPL_JOINTS):
-        if idx in sensors.SMPL_MAJOR_JOINTS:
-            red_idx = sensors.SMPL_MAJOR_JOINTS.index(idx)
-            smpl_full[:, idx * dof:(idx + 1) * dof] = smpl_reduced[:, red_idx * dof:(red_idx + 1) * dof]
+        if idx in target_joints:
+            red_idx = target_joints.index(idx)
+            smpl_full[:, idx * dof : (idx + 1) * dof] = smpl_reduced[
+                :, red_idx * dof : (red_idx + 1) * dof
+            ]
         else:
             if dof == 9:
                 identity = np.repeat(np.eye(3, 3)[np.newaxis, ...], seq_length, axis=0)
             else:
-                identity = np.concatenate([np.array([[1.0, 0.0, 0.0, 0.0]])] * seq_length, axis=0)
-            smpl_full[:, idx * dof:(idx + 1) * dof] = np.reshape(identity, [-1, dof])
+                identity = np.concatenate(
+                    [np.array([[1.0, 0.0, 0.0, 0.0]])] * seq_length, axis=0
+                )
+            smpl_full[:, idx * dof : (idx + 1) * dof] = np.reshape(identity, [-1, dof])
     return smpl_full
 
 
@@ -158,7 +162,9 @@ def smpl_rot_to_global(smpl_rotations_local):
     do_reshape = in_shape[-1] != 3
     if do_reshape:
         assert in_shape[-1] == 216
-        rots = np.reshape(smpl_rotations_local, in_shape[:-1] + (sensors.NUM_SMPL_JOINTS, 3, 3))
+        rots = np.reshape(
+            smpl_rotations_local, in_shape[:-1] + (sensors.NUM_SMPL_JOINTS, 3, 3)
+        )
     else:
         rots = smpl_rotations_local
 

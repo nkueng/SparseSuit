@@ -78,9 +78,14 @@ def vis_smpl(
         # IMU sensors placed on SMPL model (optionally rotated by orientation measurements)
         if sensors is not None:
             for s, sensor in enumerate(sensors):
-                sens = trimesh.creation.axis(
-                    origin_size=0.005, axis_radius=0.003, axis_length=0.03
-                )
+                if sensor == []:
+                    continue
+                if oris is not None:
+                    sens = trimesh.creation.axis(
+                        origin_size=0.005, axis_radius=0.003, axis_length=0.03
+                    )
+                else:
+                    sens = trimesh.creation.uv_sphere(radius=0.01)
                 sens.visual.vertex_colors = [0, 0, 0, 1.0]
                 tfs = np.tile(np.eye(4), (sensor.shape[1], 1, 1))
                 if oris is not None:

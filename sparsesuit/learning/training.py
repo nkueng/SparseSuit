@@ -2,18 +2,20 @@ import datetime
 import os
 import random
 import shutil
+import sys
 import time
 
 import hydra
 import numpy as np
 import torch
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from webdataset import WebDataset
 
 from models import BiRNN
 from sparsesuit.constants import paths
+from sparsesuit.learning.evaluation import Evaluator
 from sparsesuit.utils import utils
 
 seed = 14
@@ -24,6 +26,7 @@ torch.manual_seed(seed)
 
 class Trainer:
     def __init__(self, cfg):
+        print("Training\n*******************\n")
         self.cfg = cfg
 
         # cuda setup
@@ -47,9 +50,10 @@ class Trainer:
         if cfg.debug:
             ds_folder += "_debug"
             self.exp_name = "debug"
-            self.epochs = 1
+            self.epochs = 2
+            self.train_eval_step = 10
 
-        if train_config.dataset_type == "synthetic":
+        if train_config.dataset == "synthetic":
 
             if train_config.config == "SSP":
                 ds_folder += "_SSP"
@@ -64,7 +68,7 @@ class Trainer:
                 ds_folder += "_noisy"
             ds_folder += "_nn"
 
-        elif train_config.dataset_type == "real":
+        elif train_config.dataset == "real":
 
             if train_config.config == "MVN":
                 ds_folder = paths.DIP_17_NN_PATH
@@ -112,21 +116,21 @@ class Trainer:
 
         # tensorboard setup
         experiment_name = (
-                "-"
-                + str(self.exp_name)
-                + "-"
-                + train_sens.config
-                + str(num_train_sens)
-                + "-ep"
-                + str(self.epochs)
-                + "-stateless"
-                + "-clip"
-                + str(self.grad_clip_norm)
-                + "-shuff_batch"
+            "-"
+            + str(self.exp_name)
+            + "-"
+            + train_config.config
+            + str(num_train_sens)
+            + "-ep"
+            + str(self.epochs)
+            + "-stateless"
+            + "-clip"
+            + str(self.grad_clip_norm)
+            + "-shuff_batch"
         )
         time_stamp = datetime.datetime.now().strftime("%Y.%m.%d-%H:%M")
         self.model_path = (
-                os.path.join(os.getcwd(), "runs/") + time_stamp + experiment_name
+            os.path.join(os.getcwd(), "runs/") + time_stamp + experiment_name
         )
         self.writer = SummaryWriter(self.model_path)
 
@@ -137,13 +141,13 @@ class Trainer:
                 shardshuffle=True,
                 length=self.train_ds_size,
             )
-                .decode()
-                .to_tuple("ori.npy", "acc.npy", "pose.npy")
+            .decode()
+            .to_tuple("ori.npy", "acc.npy", "pose.npy")
         )
         valid_ds = (
             WebDataset(self.valid_ds_path, length=self.valid_ds_size)
-                .decode()
-                .to_tuple("ori.npy", "acc.npy", "pose.npy")
+            .decode()
+            .to_tuple("ori.npy", "acc.npy", "pose.npy")
         )
 
         # create specific dataloaders for training (batched sequences) and testing (unrolled sequences)
@@ -162,7 +166,7 @@ class Trainer:
 
         # iterate over epochs
         for epoch in range(self.epochs):
-            print("Epoch {}\n-------------------------------".format(epoch + 1))
+            print("\nEpoch {}\n-------------------------------".format(epoch + 1))
 
             # iterate over all sample batches in epoch
             for batch_num, (ori, acc, pose) in enumerate(self.train_dl):
@@ -188,7 +192,7 @@ class Trainer:
                     # early stopping
                     if valid_loss <= best_valid_loss:
                         # save model
-                        print("\nSaving model.")
+                        print("Saving model.")
                         torch.save(
                             self.model.state_dict(), self.model_path + "/checkpoint.pt"
                         )
@@ -199,7 +203,7 @@ class Trainer:
 
                     if num_steps_wo_improvement == self.early_stop_tol:
                         stop_signal = True
-                        print("\nStopping early.")
+                        print("Stopping early.")
                         break
 
             if stop_signal:
@@ -207,7 +211,7 @@ class Trainer:
 
         t1 = time.perf_counter()
         duration = t1 - t0
-        print("Done in {} seconds!".format(duration))
+        print("Done in {} seconds!\n".format(duration))
 
         self.write_config(duration, epoch, best_valid_loss)
 
@@ -215,17 +219,18 @@ class Trainer:
 
     def write_config(self, duration, epoch, best_valid_loss):
         # load training configuration
-        train_config = self.cfg.training
+        train_config = OmegaConf.create(self.cfg.training)
 
-        # add stats
+        # add stats to training config
         train_config.duration = duration
         train_config.steps = self.step_count
         train_config.epochs = epoch
         train_config.best_valid_loss = best_valid_loss
 
         # compile target config to dump with model checkpoint
-        trgt_config = self.ds_config
+        trgt_config = OmegaConf.create()
         trgt_config.training = train_config
+        trgt_config.dataset = self.ds_config
 
         utils.write_config(path=self.model_path, config=trgt_config)
 
@@ -282,8 +287,9 @@ class Trainer:
         # terminal output
         current = (sample + 1) * len(y)
         print(
-            "{}. SMPL loss: {:.3f}, ACC loss: {:.3f} [{}/{}]".format(sample, loss_smpl, loss_acc, current,
-                                                                     self.train_ds_size)
+            "{}. SMPL loss: {:.3f}, ACC loss: {:.3f} [{}/{}]".format(
+                sample, loss_smpl, loss_acc, current, self.train_ds_size
+            )
         )
 
         return loss, loss_smpl.item(), loss_acc.item()
@@ -328,11 +334,18 @@ def do_training(cfg: DictConfig):
     try:
         trainer = Trainer(cfg=cfg)
         trainer.train()
+
+        # evaluate trained model right away
+        eval_cfg_path = os.path.join(os.getcwd(), "conf/evaluation.yaml")
+        eval_cfg = OmegaConf.load(eval_cfg_path)
+        eval_cfg.evaluation.experiment_path = trainer.model_path
+        eval = Evaluator(cfg=eval_cfg)
+        eval.evaluate()
+
     except KeyboardInterrupt:
         print("Interrupted. Deleting model_folder!")
         shutil.rmtree(trainer.model_path)
-
-    # TODO: evaluate model
+        sys.exit()
 
 
 if __name__ == "__main__":

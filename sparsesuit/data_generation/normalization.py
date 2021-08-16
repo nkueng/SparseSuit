@@ -34,7 +34,7 @@ class Normalizer:
         # choose dataset folder based on params
         if self.dataset_type == "synthetic":
             src_folder = paths.AMASS_PATH
-            self.has_noise = cfg.dataset.acc_noise > 0
+            self.has_noise = cfg.dataset.noise
             if self.debug:
                 src_folder += "_debug"
             if self.sens_config == "SSP":
@@ -96,14 +96,14 @@ class Normalizer:
         # determine root sensor depending on sensor config
         if self.sens_config == "SSP":
             # the SSP has no root sensor, so a virtual sensor is derived from the two hip sensors
-            root_indx = [
+            self.root_indx = [
                 self.sens_names.index("left_pelvis"),
                 self.sens_names.index("right_pelvis"),
             ]
             self.sens_names.remove("left_pelvis")
             self.sens_names.remove("right_pelvis")
         elif self.sens_config == "MVN":
-            root_indx = self.sens_names.index("pelvis")
+            self.root_indx = self.sens_names.index("pelvis")
             self.sens_names.remove("pelvis")
         else:
             raise NameError("Invalid sensor configuration. Aborting!")
@@ -155,7 +155,7 @@ class Normalizer:
                 if seq_length == 0:
                     continue
 
-                subject_i = subdir.split(self.src_dir)[1]
+                subject_i = subdir.split(self.src_dir + "/")[1]
                 motion_type_i = file.split(".")[0]
 
                 # determine name of file for normalized asset
@@ -183,7 +183,7 @@ class Normalizer:
                 # normalize orientation and acceleration for each frame w.r.t. root
                 if self.sens_config == "SSP":
                     # get hip sensor orientations
-                    hip_oris = np.reshape(oris_sorted[:, root_indx], [-1, 9])
+                    hip_oris = np.reshape(oris_sorted[:, self.root_indx], [-1, 9])
                     # transform to angle-axis
                     hip_aas = np.reshape(
                         utils.rot_matrix_to_aa(hip_oris), [new_seq_length, 2, 3]
@@ -198,26 +198,26 @@ class Normalizer:
                     root_ori_inv = np.transpose(root_ori, [0, 1, 3, 2])
 
                     # get hip sensor accelerations
-                    hip_accs = accs_sorted[:, [root_indx]]
+                    hip_accs = accs_sorted[:, [self.root_indx]]
                     # average to get virtual sensor acceleration to normalize other sensors
                     root_acc = np.mean(hip_accs, axis=2)
                 elif self.sens_config == "MVN":
                     root_ori_inv = np.transpose(
-                        oris_sorted[:, [root_indx]], [0, 1, 3, 2]
+                        oris_sorted[:, [self.root_indx]], [0, 1, 3, 2]
                     )
-                    root_acc = accs_sorted[:, [root_indx]]
+                    root_acc = accs_sorted[:, [self.root_indx]]
 
                 # normalize all orientations
                 oris_norm = np.matmul(root_ori_inv, oris_sorted)
                 # discard root orientation which is always identity
-                oris_norm_wo_root = np.delete(oris_norm, root_indx, axis=1)
+                oris_norm_wo_root = np.delete(oris_norm, self.root_indx, axis=1)
                 oris_vec = np.reshape(oris_norm_wo_root, (new_seq_length, -1))
 
                 # normalize all accelerations
                 accs_norm = accs_sorted - root_acc
                 accs_norm = np.matmul(root_ori_inv, accs_norm[..., np.newaxis])
                 # discard root acceleration which is always zero
-                accs_norm_wo_root = np.delete(accs_norm, root_indx, axis=1)
+                accs_norm_wo_root = np.delete(accs_norm, self.root_indx, axis=1)
                 accs_vec = np.reshape(accs_norm_wo_root, (new_seq_length, -1))
 
                 # convert poses to rotation matrix format if necessary
@@ -467,6 +467,7 @@ class Normalizer:
         }
 
         # update source dataset config
+        src_config.dataset.sensors = self.sens_names
         src_config.dataset.assets = asset_info
         src_config.dataset.pred_trgt_joints = self.pred_trgt_joints
 

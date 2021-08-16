@@ -73,9 +73,10 @@ def assemble_input_target(orientation, acceleration, pose, sens_ind):
     oris_vec = np.reshape(oris_sel, [oris_sel.shape[0], oris_sel.shape[1], -1])
     accs_vec = np.reshape(accs_sel, [accs_sel.shape[0], accs_sel.shape[1], -1])
 
-    input_vec = np.concatenate([oris_vec, accs_vec], axis=2)
-    target_vec = np.concatenate([pose, accs_vec], axis=2)
+    input_vec = torch.cat([oris_vec, accs_vec], dim=2)
+    target_vec = torch.cat([pose, accs_vec], dim=2)
     return input_vec, target_vec
+
 
 def rad2deg(v):
     """

@@ -15,15 +15,13 @@ from normalization import Normalizer
 
 class Synthesizer:
     def __init__(self, cfg):
-        self.config = cfg
-        
         # synthesis parameters
-        self.sens_config = cfg.sensors.config
-        self.acc_delta = cfg.sensors.acc_delta
-        self.acc_noise = cfg.sensors.acc_noise
+        self.sens_config = cfg.dataset.config
+        self.acc_delta = cfg.dataset.acc_delta
+        self.acc_noise = cfg.dataset.acc_noise
         self.add_noise = self.acc_noise > 0
-        self.fps = cfg.fps
-        
+        self.fps = cfg.dataset.fps
+
         # run parameters
         self.visualize = cfg.visualize
         self.skip_existing = cfg.skip_existing
@@ -56,7 +54,7 @@ class Synthesizer:
         self.joint_ids = [sensors.SENS_JOINTS_IDS[sensor] for sensor in self.sens_names]
 
         # load SMPL model(s)
-        self.smpl_models = smpl_helpers.load_smplx(cfg["smpl_genders"])
+        self.smpl_models = smpl_helpers.load_smplx(cfg.dataset.smpl_genders)
 
         self.asset_counter = 0
 
@@ -72,7 +70,7 @@ class Synthesizer:
 
                 # assemble target path
                 curr_dir = subdir.split("/")[-1]
-                dataset_name = subdir.split(self.src_dir)[1].split("/")[0]
+                dataset_name = subdir.split(self.src_dir)[1].split("/")[1]
 
                 # DEBUG
                 # if dataset_name == 'ACCAD':
@@ -95,11 +93,11 @@ class Synthesizer:
                     self.asset_counter += 1
 
         self.write_config()
-        
+
     def write_config(self):
         # save configuration file for synthetic dataset
         dataset_info = {
-            "num_assets": self.asset_counter,
+            "sequences": self.asset_counter,
             "config": self.sens_config,
             "type": "synthetic",
             "fps": self.fps,
@@ -108,7 +106,7 @@ class Synthesizer:
             "count": len(self.sens_names),
             "sensors": self.sens_names,
             "vert_ids": self.sens_vert_ids,
-            "joint_ids": self.joint_ids,
+            # "joint_ids": self.joint_ids,
         }
         ds_config = {
             "dataset": dataset_info,
