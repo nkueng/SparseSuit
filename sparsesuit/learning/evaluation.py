@@ -25,8 +25,8 @@ class Evaluator:
         self.future_frames = self.eval_config.future_frames
 
         # load training configuration of experiment
-        # exp_path = os.path.join(os.getcwd(), "runs/", self.eval_config.experiment_path)
-        self.train_config = utils.load_config(self.eval_config.experiment_path)
+        self.exp_path = os.path.join(os.getcwd(), "runs/", self.eval_config.experiment)
+        self.train_config = utils.load_config(self.exp_path)
 
         # cuda setup
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -37,9 +37,9 @@ class Evaluator:
 
         # setup model
         self.pred_trgt_joints = self.train_config.dataset.pred_trgt_joints
-        num_train_sens = len(self.train_config.training.sensors)
-        ori_dim = num_train_sens * 9
-        acc_dim = num_train_sens * 3
+        num_input_sens = len(self.train_config.training.sensors)
+        ori_dim = num_input_sens * 9
+        acc_dim = num_input_sens * 3
         self.pose_dim = len(self.pred_trgt_joints) * 9
 
         input_dim = ori_dim + acc_dim
@@ -48,7 +48,7 @@ class Evaluator:
         self.model = models.BiRNN(input_dim=input_dim, target_dim=target_dim).to(
             self.device
         )
-        model_path = os.path.join(self.eval_config.experiment_path, "checkpoint.pt")
+        model_path = os.path.join(self.exp_path, "checkpoint.pt")
         self.model.load_state_dict(torch.load(model_path, map_location=self.device))
         self.model.eval()
 
@@ -201,7 +201,7 @@ class Evaluator:
         trgt_config.evaluation = eval_config
         trgt_config.dataset = self.train_config.dataset
 
-        utils.write_config(path=self.eval_config.experiment_path, config=trgt_config)
+        utils.write_config(path=self.exp_path, config=trgt_config)
 
     def predict_window(self, x):
         """Pass a sliding window of (past_frames + future_frames + 1) input frames and keep only (past_frames +
@@ -301,7 +301,7 @@ class Evaluator:
 
         # add rotation matrices (identity) for missing SMPL-X joints
         padding_len = sensors.NUM_SMPLX_JOINTS - sensors.NUM_SMPL_JOINTS
-        padding = np.tile(np.identity(3), [batch_size, padding_len])
+        padding = np.tile(np.identity(3), [batch_size, padding_len, 1, 1])
         padding_flat = np.reshape(padding, [batch_size, -1])
         pred_poses_padded = np.concatenate(
             (predicted_pose_params[:, : 24 * pose_dim], padding_flat), axis=1
@@ -358,8 +358,7 @@ class Evaluator:
         mm = np.linalg.norm(np.asarray(pred_joints_aligned) - targ_joints_sel, axis=2)
 
         if self.visualize:
-            pred_verts_aligned_np = np.asarray(pred_verts_aligned)
-            verts = [targ_verts_np, pred_verts_aligned_np]
+            verts = [targ_verts_np, np.asarray(pred_verts_aligned)]
             vertex_colors = ["green", "orange"]
             joints = [targ_joints_np, np.asarray(pred_joints_aligned)]
 
@@ -369,7 +368,7 @@ class Evaluator:
             sens_verts = self.train_config.dataset.vert_ids
             train_sens_verts = [sens_verts[idx] for idx in train_sens_ids]
             sensors_vis = [
-                pred_verts_aligned_np[:, train_sens_verts],
+                targ_verts_np[:, train_sens_verts],
             ]
 
             visualization.vis_smpl(
@@ -380,6 +379,7 @@ class Evaluator:
                 sensors=sensors_vis,
                 play_frames=300,
                 playback_speed=0.3,
+                add_captions=True,
             )
 
         return mm * 100  # convert m to cm

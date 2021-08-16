@@ -20,7 +20,7 @@ def vis_smpl(
 ):
     """Displays play_frames number of frames of the given vertices with the given SMPL model."""
     # constants
-    FPS = 60 * playback_speed
+    fps = 60 * playback_speed
     num_models = len(vertices)
     num_vertices = vertices[0].shape[1]
     num_frames = vertices[0].shape[0]
@@ -78,8 +78,6 @@ def vis_smpl(
         # IMU sensors placed on SMPL model (optionally rotated by orientation measurements)
         if sensors is not None:
             for s, sensor in enumerate(sensors):
-                if sensor == []:
-                    continue
                 if oris is not None:
                     sens = trimesh.creation.axis(
                         origin_size=0.005, axis_radius=0.003, axis_length=0.03
@@ -147,7 +145,7 @@ def vis_smpl(
         scene,
         run_in_thread=True,
         use_raymond_lighting=True,
-        refresh_rate=FPS,
+        refresh_rate=fps,
         caption=captions,
         use_perspective_cam=False,
     )
@@ -169,6 +167,6 @@ def vis_smpl(
         # keep track of new nodes to remove next iteration
         old_nodes = nodes_buffer[i]
 
-        time.sleep(1 / FPS)
+        time.sleep(1 / fps)
 
     v.close_external()

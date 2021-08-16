@@ -102,7 +102,7 @@ class Trainer:
 
         # init network
         self.model = BiRNN(input_dim=input_dim, target_dim=target_dim).to(self.device)
-        print(self.model)
+        # print(self.model)
 
         # init loss fct and optimizer
         self.loss_fn = torch.nn.GaussianNLLLoss(reduction="sum")
@@ -115,23 +115,11 @@ class Trainer:
         self.step_count = 0  # count number of training steps (x-axis in tensorboard)
 
         # tensorboard setup
-        experiment_name = (
-            "-"
-            + str(self.exp_name)
-            + "-"
-            + train_config.config
-            + str(num_train_sens)
-            + "-ep"
-            + str(self.epochs)
-            + "-stateless"
-            + "-clip"
-            + str(self.grad_clip_norm)
-            + "-shuff_batch"
-        )
         time_stamp = datetime.datetime.now().strftime("%Y.%m.%d-%H:%M")
-        self.model_path = (
-            os.path.join(os.getcwd(), "runs/") + time_stamp + experiment_name
+        self.experiment_name = "-".join(
+            [time_stamp, self.exp_name, train_config.config + str(num_train_sens)]
         )
+        self.model_path = os.path.join(os.getcwd(), "runs/" + self.experiment_name)
         self.writer = SummaryWriter(self.model_path)
 
         # create datasets
@@ -157,6 +145,7 @@ class Trainer:
         self.valid_dl = DataLoader(valid_ds)
 
     def train(self):
+        print("Starting experiment: {}".format(self.experiment_name))
         # train and test model iteratively
         valid_loss = np.inf
         best_valid_loss = np.inf
@@ -338,7 +327,7 @@ def do_training(cfg: DictConfig):
         # evaluate trained model right away
         eval_cfg_path = os.path.join(os.getcwd(), "conf/evaluation.yaml")
         eval_cfg = OmegaConf.load(eval_cfg_path)
-        eval_cfg.evaluation.experiment_path = trainer.model_path
+        eval_cfg.evaluation.experiment = trainer.experiment_name
         eval = Evaluator(cfg=eval_cfg)
         eval.evaluate()
 

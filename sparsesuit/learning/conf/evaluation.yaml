@@ -1,10 +1,10 @@
 evaluation:
-  experiment_path: /home/nic/Documents/Rokoko/SparseSuit/sparsesuit/learning/runs/2021.08.16-12:01-debug-SSP19-ep2-stateless-clip10-shuff_batch
+  experiment: 2021.08.08-18:14-sens18-ep80-stateless-clip10-shuff_batch
   dataset: synthetic
   noise: True
   past_frames: 20
   future_frames: 5
-debug: True
+debug: False
 visualize: True
 
 hydra:
