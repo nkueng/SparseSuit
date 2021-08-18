@@ -10,6 +10,7 @@ from sparsesuit.utils import utils, smpl_helpers, visualization
 from sparsesuit.learning import models
 from sparsesuit.constants import paths, sensors
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 import hydra
@@ -37,7 +38,7 @@ class Evaluator:
 
         # setup model
         self.pred_trgt_joints = self.train_config.dataset.pred_trgt_joints
-        num_input_sens = len(self.train_config.training.sensors)
+        num_input_sens = len(self.train_config.experiment.sensors)
         ori_dim = num_input_sens * 9
         acc_dim = num_input_sens * 3
         self.pose_dim = len(self.pred_trgt_joints) * 9
@@ -53,7 +54,7 @@ class Evaluator:
         self.model.eval()
 
         # load appropriate dataset for evaluation
-        self.suit_config = self.train_config.training.config
+        self.suit_config = self.train_config.experiment.config
         if self.eval_config.dataset == "synthetic":
             ds_folder = paths.AMASS_PATH
 
@@ -90,8 +91,12 @@ class Evaluator:
 
         # get indices of sensors the model was trained with in evaluation dataset
         test_ds_sens = test_ds_config.sensors
-        train_sens = self.train_config.training.sensors
+        train_sens = self.train_config.experiment.sensors
         self.sens_ind = [test_ds_sens.index(sens) for sens in train_sens]
+        # sens_ind_mask = [sens in train_sens for sens in test_ds_sens]
+        # sens_ind_alt = [
+        #     item.index() for keep, item in zip(sens_ind_mask, test_ds_sens) if keep
+        # ]
 
         # load test dataset statistics
         stats_path = os.path.join(ds_dir, "stats.npz")
@@ -108,62 +113,79 @@ class Evaluator:
 
     def evaluate(self):
         # set up error statistics
-        stats_pos_err, stats_ang_err = Welford(), Welford()
+        stats_pos_err = Welford()
+        stats_ang_err = Welford()
+        stats_loss = Welford()
 
         # iterate over test dataset
-        for batch_num, (ori, acc, pose_trgt_norm) in enumerate(self.test_dl):
-            print("computing metrics on asset {}".format(batch_num))
+        with torch.no_grad():
+            for batch_num, (ori, acc, pose_trgt_norm) in enumerate(self.test_dl):
+                print(
+                    "computing metrics on asset {} with {} frames".format(
+                        batch_num, ori.shape[1]
+                    )
+                )
 
-            # load input and target
-            input_vec, target_vec = utils.assemble_input_target(
-                ori, acc, pose_trgt_norm, self.sens_ind
-            )
+                # load input and target
+                input_vec, target_vec = utils.assemble_input_target(
+                    ori, acc, pose_trgt_norm, self.sens_ind
+                )
 
-            # predict SMPL pose params online or offline depending on past_/future_frames
-            x, y = input_vec.to(self.device).float(), target_vec.to(self.device).float()
-            if self.past_frames == -1 or self.future_frames == -1:
-                pred_mean, _, _, _ = self.model(x)
-            else:
-                pred_mean = self.predict_window(x)
+                # predict SMPL pose params online or offline depending on past_/future_frames
+                x, y = (
+                    input_vec.to(self.device).float(),
+                    target_vec.to(self.device).float(),
+                )
+                if self.past_frames == -1 or self.future_frames == -1:
+                    pred_mean, pred_std, _, _ = self.model(x)
+                else:
+                    pred_mean, pred_std = self.predict_window(x)
 
-            # extract poses from predictions
-            pose_pred_norm = pred_mean[:, :, : self.pose_dim].cpu().detach().numpy()
-            # undo normalization of SMPL predictions and targets
-            pose_pred = pose_pred_norm * self.pose_std + self.pose_mean
-            pose_trgt = (
-                pose_trgt_norm.cpu().detach().numpy() * self.pose_std + self.pose_mean
-            )
+                # compute loss
+                loss = F.gaussian_nll_loss(pred_mean, y, pred_std)
+                stats_loss.add(loss.cpu().detach().numpy())
 
-            # expand reduced (15/19 joints) to full 24 smpl joints
-            pose_pred_full = [
-                smpl_helpers.smpl_reduced_to_full(p, self.pred_trgt_joints)
-                for p in pose_pred
-            ]
-            pose_trgt_full = [
-                smpl_helpers.smpl_reduced_to_full(p, self.pred_trgt_joints)
-                for p in pose_trgt
-            ]
+                print("Loss: {:.2f}".format(loss))
 
-            # rotate root for upright human-beings
-            pose_pred_full[0][:, :9] = [0, 0, 1, 1, 0, 0, 0, 1, 0]
-            pose_trgt_full[0][:, :9] = [0, 0, 1, 1, 0, 0, 0, 1, 0]
+                # extract poses from predictions
+                pose_pred_norm = pred_mean[:, :, : self.pose_dim].cpu().detach().numpy()
+                # undo normalization of SMPL predictions and targets
+                pose_pred = pose_pred_norm * self.pose_std + self.pose_mean
+                pose_trgt = (
+                    pose_trgt_norm.cpu().detach().numpy() * self.pose_std
+                    + self.pose_mean
+                )
 
-            # evaluate predictions for angular and positional error in chunks
-            max_chunk_size = 500 if paths.ON_MAC else 1000
-            chunks = input_vec.shape[1] // max_chunk_size + 1
-            for k in range(chunks):
-                pred_k = [
-                    pose_pred_full[0][k * max_chunk_size : (k + 1) * max_chunk_size]
+                # expand reduced (15/19 joints) to full 24 smpl joints
+                pose_pred_full = [
+                    smpl_helpers.smpl_reduced_to_full(p, self.pred_trgt_joints)
+                    for p in pose_pred
                 ]
-                targ_k = [
-                    pose_trgt_full[0][k * max_chunk_size : (k + 1) * max_chunk_size]
+                pose_trgt_full = [
+                    smpl_helpers.smpl_reduced_to_full(p, self.pred_trgt_joints)
+                    for p in pose_trgt
                 ]
-                ang_err, pos_err = self.compute_metrics(pred_k, targ_k)
 
-                # add errors to stats
-                for i in range(len(ang_err)):
-                    stats_ang_err.add(ang_err[i])
-                    stats_pos_err.add(pos_err[i])
+                # rotate root for upright human-beings
+                pose_pred_full[0][:, :9] = [0, 0, 1, 1, 0, 0, 0, 1, 0]
+                pose_trgt_full[0][:, :9] = [0, 0, 1, 1, 0, 0, 0, 1, 0]
+
+                # evaluate predictions for angular and positional error in chunks
+                max_chunk_size = 500 if paths.ON_MAC else 1000
+                chunks = input_vec.shape[1] // max_chunk_size + 1
+                for k in range(chunks):
+                    pred_k = [
+                        pose_pred_full[0][k * max_chunk_size : (k + 1) * max_chunk_size]
+                    ]
+                    targ_k = [
+                        pose_trgt_full[0][k * max_chunk_size : (k + 1) * max_chunk_size]
+                    ]
+                    ang_err, pos_err = self.compute_metrics(pred_k, targ_k)
+
+                    # add errors to stats
+                    for i in range(len(ang_err)):
+                        stats_ang_err.add(ang_err[i])
+                        stats_pos_err.add(pos_err[i])
 
         # summarize errors
         avg_ang_err = np.mean(stats_ang_err.mean[sensors.ANG_EVAL_JOINTS])
@@ -172,32 +194,53 @@ class Evaluator:
         avg_pos_err = np.mean(stats_pos_err.mean[sensors.POS_EVAL_JOINTS])
         std_pos_err = np.mean(np.sqrt(stats_pos_err.var_p[sensors.POS_EVAL_JOINTS]))
 
+        avg_loss = stats_loss.mean
+        std_loss = np.sqrt(stats_loss.var_p)
+
         print(
-            "Average joint angle error (deg): {:.4f} (+/- {:.3f})".format(
+            "Average joint angle error (deg): {:.2f} (+/- {:.2f})".format(
                 avg_ang_err, std_ang_err
             )
         )
         print(
-            "Average joint position error (cm): {:.4f} (+/- {:.3f})".format(
+            "Average joint position error (cm): {:.2f} (+/- {:.2f})".format(
                 avg_pos_err, std_pos_err
             )
         )
+        print("Average loss: {:.2f} (+/- {:.2f})".format(avg_loss, std_loss))
 
-        self.write_config(avg_ang_err, std_ang_err, avg_pos_err, std_pos_err)
+        self.write_config(
+            avg_ang_err,
+            std_ang_err,
+            avg_pos_err,
+            std_pos_err,
+            avg_loss,
+            std_loss,
+        )
 
-    def write_config(self, avg_ang_err, std_ang_err, avg_pos_err, std_pos_err):
+    def write_config(
+        self,
+        avg_ang_err,
+        std_ang_err,
+        avg_pos_err,
+        std_pos_err,
+        avg_loss,
+        std_loss,
+    ):
         # load evaluation configuration
         eval_config = OmegaConf.create(self.eval_config)
 
         # add stats to training config
-        eval_config.mean_ang_err = float(avg_ang_err)
-        eval_config.std_ang_err = float(std_ang_err)
-        eval_config.mean_pos_err = float(avg_pos_err)
-        eval_config.std_pos_err = float(std_pos_err)
+        eval_config.mean_ang_err = round(float(avg_ang_err), 2)
+        eval_config.std_ang_err = round(float(std_ang_err), 2)
+        eval_config.mean_pos_err = round(float(avg_pos_err), 2)
+        eval_config.std_pos_err = round(float(std_pos_err), 2)
+        eval_config.mean_loss = round(float(avg_loss), 2)
+        eval_config.std_loss = round(float(std_loss), 2)
 
         # compile target config to dump with model checkpoint
         trgt_config = OmegaConf.create()
-        trgt_config.training = self.train_config.training
+        trgt_config.experiment = self.train_config.experiment
         trgt_config.evaluation = eval_config
         trgt_config.dataset = self.train_config.dataset
 
@@ -208,18 +251,23 @@ class Evaluator:
         1)th prediction at each step. The full prediction is the concatenated individual predictions."""
         seq_len = x.shape[1]
         preds_mean = []
+        preds_std = []
 
         for step in range(seq_len):
             # find start and end of current window
             start_idx = max(step - self.past_frames, 0)
             end_idx = min(step + self.future_frames + 1, seq_len)
 
+            # extract window and make prediction
             input_window = x[:, start_idx:end_idx]
-            pred_mean_window, _, _, _ = self.model(input_window)
+            pred_mean_window, pred_std_window, _, _ = self.model(input_window)
+
+            # find index of frame between past and future frames
             pred_idx = min(step, self.past_frames)
             preds_mean.append(pred_mean_window[:, pred_idx : pred_idx + 1])
+            preds_std.append(pred_std_window[:, pred_idx : pred_idx + 1])
 
-        return torch.cat(preds_mean, dim=1)
+        return torch.cat(preds_mean, dim=1), torch.cat(preds_std, dim=1)
 
     def compute_metrics(self, prediction, target, compute_positional_error=True):
         """

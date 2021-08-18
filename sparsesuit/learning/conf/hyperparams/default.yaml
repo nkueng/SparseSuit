@@ -1,0 +1,5 @@
+batch_size: 16
+max_epochs: 80
+early_stopping_tolerance: 20
+evaluate_every_step: 500
+grad_clip_norm: 10

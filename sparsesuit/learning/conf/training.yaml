@@ -1,37 +1,14 @@
-training:
-  experiment_name: baseline
-  config: SSP
-  count: 19
-  sensors:
-    - left_back
-    - right_back
-    - left_collar
-    - right_collar
-    - head
-    - left_shoulder
-    - right_shoulder
-    - left_elbow
-    - right_elbow
-    - left_wrist
-    - right_wrist
-    - left_hip
-    - right_hip
-    - left_knee
-    - right_knee
-    - left_ankle
-    - right_ankle
-  dataset: synthetic
-  noise: True
-  batch_size: 16
-  max_epochs: 80
-  early_stopping_tolerance: 10
-  evaluate_every_step: 500
-  grad_clip_norm: 10
-debug: True
+debug: False
+defaults:
+ - experiment: baseline
+ - hyperparams: default
+ - override hydra/job_logging: disabled
+ - override hydra/hydra_logging: disabled
 
 hydra:
   run:
     dir: .
   output_subdir: null
-defaults:
-  - override hydra/job_logging: disabled
+  sweep:
+    dir: .
+    subdir: .

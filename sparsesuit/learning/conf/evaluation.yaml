@@ -1,11 +1,11 @@
 evaluation:
-  experiment: 2021.08.08-18:14-sens18-ep80-stateless-clip10-shuff_batch
+  experiment: 2021.08.18-12:11-sym15in-SSP15
   dataset: synthetic
   noise: True
   past_frames: 20
   future_frames: 5
 debug: False
-visualize: True
+visualize: False
 
 hydra:
   run:

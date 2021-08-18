@@ -2,12 +2,12 @@ dataset:
   config: SSP
   type: synthetic
   acc_delta: 4
-  noise: True
-  acc_noise: 0.00016
+  noise: False
+  acc_noise: 0.0
   fps: 60
   smpl_genders: [male, female]
 visualize: False
-debug: True
+debug: False
 skip_existing: True
 
 hydra:

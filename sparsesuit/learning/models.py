@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 
 class BiRNN(nn.Module):
@@ -30,9 +31,8 @@ class BiRNN(nn.Module):
         self.bidirectional = bidirectional
         self.num_directions = 2 if self.bidirectional else 1
 
-        self.dropout = nn.Dropout(
-            p=0.2
-        )  # module is more convenient than functional, turns off automatically in eval()
+        # module is more convenient than functional, turns off automatically in eval()
+        self.dropout = nn.Dropout(p=0.2)
         self.fc1 = nn.Linear(in_features=input_dim, out_features=hidden_dim)
         self.relu = nn.ReLU()
         self.lstm = nn.LSTM(
@@ -43,10 +43,12 @@ class BiRNN(nn.Module):
             bidirectional=bidirectional,
         )
         self.fc2a = nn.Linear(
-            in_features=self.num_directions * hidden_dim, out_features=target_dim
+            in_features=self.num_directions * hidden_dim,
+            out_features=target_dim,
         )
         self.fc2b = nn.Linear(
-            in_features=self.num_directions * hidden_dim, out_features=target_dim
+            in_features=self.num_directions * hidden_dim,
+            out_features=target_dim,
         )
 
     def forward(self, x, h_last=None, c_last=None):
@@ -55,11 +57,12 @@ class BiRNN(nn.Module):
         out = self.relu(out)
         # states are init as zero if not provided
         if h_last is None:
-            h_last, c_last = self.init_hidden(x.shape[0])
-        out, (h, c) = self.lstm(out, (h_last.to(x.device), c_last.to(x.device)))
+            out, (h, c) = self.lstm(out)
+        else:
+            out, (h, c) = self.lstm(out, (h_last.to(x.device), c_last.to(x.device)))
         out_mu = self.fc2a(out)
         out_sigma = self.fc2b(out)
-        out_sigma = nn.functional.softplus(out_sigma)
+        out_sigma = F.softplus(out_sigma)
         return out_mu, out_sigma, h, c
 
     def init_hidden(self, batch_size):
