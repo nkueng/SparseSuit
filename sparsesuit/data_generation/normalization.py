@@ -3,20 +3,21 @@ zero mean & unit variance.
 Input: pickle or npz files with N IMU orientations and accelerations as well as SMPL poses
 for 24 joints
 Output: normalized zero-mean unit-variance input and target vectors of N-1 IMUs ready for learning """
-import shutil
-import tarfile
-
-import numpy as np
 import os
 import pickle as pkl
+import shutil
+import tarfile
 from pathlib import Path
+
+import hydra
+import numpy as np
 import torch
-from welford import Welford
+from omegaconf import DictConfig
 from smplx import lbs
+from welford import Welford
+
 from sparsesuit.constants import sensors, paths
 from sparsesuit.utils import visualization, smpl_helpers, utils
-import hydra
-from omegaconf import DictConfig
 
 # fix seed for reproducibility
 seed = 14
@@ -28,6 +29,7 @@ class Normalizer:
         self.config = cfg
         self.dataset_type = cfg.dataset.type
         self.sens_config = cfg.dataset.config
+        self.tar = cfg.dataset.tar
         self.visualize = cfg.visualize
         self.debug = cfg.debug
 
@@ -405,18 +407,30 @@ class Normalizer:
                         self.trgt_dir, dataset_name, str(seq_count[0])
                     )
                     Path(dir_name).mkdir(parents=True, exist_ok=True)
-                    # write npy files
-                    input_filename = dir_name + "/" + file_id_i + ".ori.npy"
-                    with open(input_filename, "wb") as f:
-                        np.save(f, ori_i)
 
-                    output_filename = dir_name + "/" + file_id_i + ".acc.npy"
-                    with open(output_filename, "wb") as f:
-                        np.save(f, acc_i)
+                    if self.tar:
+                        # write npy files
+                        input_filename = dir_name + "/" + file_id_i + ".ori.npy"
+                        with open(input_filename, "wb") as f:
+                            np.save(f, ori_i)
 
-                    output_filename = dir_name + "/" + file_id_i + ".pose.npy"
-                    with open(output_filename, "wb") as f:
-                        np.save(f, pose_i)
+                        output_filename = dir_name + "/" + file_id_i + ".acc.npy"
+                        with open(output_filename, "wb") as f:
+                            np.save(f, acc_i)
+
+                        output_filename = dir_name + "/" + file_id_i + ".pose.npy"
+                        with open(output_filename, "wb") as f:
+                            np.save(f, pose_i)
+                    else:
+                        # write all data to one file only
+                        out_dict = {
+                            "ori": ori_i,
+                            "acc": acc_i,
+                            "pose": pose_i,
+                        }
+                        output_filename = dir_name + subject_i + "_" + file
+                        with open(output_filename, "wb") as fout:
+                            np.savez_compressed(fout, **out_dict)
 
                     seq_count[0] += 1
 
@@ -447,12 +461,13 @@ class Normalizer:
         shutil.rmtree(self.norm_dir)
 
         # convert dataset directories to .tar and delete directories
-        print("Converting to .tar...")
-        for dataset in self.dataset_names:
-            ds_path = os.path.join(self.trgt_dir, dataset)
-            with tarfile.open(ds_path + ".tar", "w") as tar:
-                tar.add(ds_path, arcname=os.path.basename(ds_path))
-            shutil.rmtree(ds_path)
+        if self.tar:
+            print("Converting to .tar...")
+            for dataset in self.dataset_names:
+                ds_path = os.path.join(self.trgt_dir, dataset)
+                with tarfile.open(ds_path + ".tar", "w") as tar:
+                    tar.add(ds_path, arcname=os.path.basename(ds_path))
+                # shutil.rmtree(ds_path)
 
     def write_config(self, train_count, valid_count, test_count):
         # load config of source dataset

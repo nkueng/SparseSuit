@@ -9,6 +9,7 @@ setup(
         "sparsesuit.data_generation",
         "sparsesuit.learning",
         "sparsesuit.utils",
+        "sparsesuit.constants",
     ],
     install_requires=[
         "numpy",
@@ -19,6 +20,5 @@ setup(
         "pyrender",
         "trimesh",
         "welford",
-        "webdataset",
     ],
 )

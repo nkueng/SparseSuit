@@ -1,7 +1,6 @@
 import datetime
 import os
 import random
-import shutil
 import sys
 import time
 
@@ -11,13 +10,13 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from webdataset import WebDataset
 
 from models import BiRNN
 from sparsesuit.constants import paths
 from sparsesuit.learning.evaluation import Evaluator
 from sparsesuit.utils import utils
 
+# TODO: still differences between training with same params, why?
 seed = 14
 random.seed(seed)
 np.random.seed(seed)
@@ -28,6 +27,7 @@ class Trainer:
     def __init__(self, cfg):
         print("Training\n*******************\n")
         self.cfg = cfg
+        print(OmegaConf.to_yaml(cfg))
 
         # cuda setup
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -40,12 +40,16 @@ class Trainer:
         num_train_sens = train_config.count
 
         # hyper-parameters
-        hyper_params = cfg.hyperparams
-        self.epochs = hyper_params.max_epochs
-        self.early_stop_tol = hyper_params.early_stopping_tolerance
-        self.batch_size_train = hyper_params.batch_size
-        self.train_eval_step = hyper_params.evaluate_every_step
-        self.grad_clip_norm = hyper_params.grad_clip_norm
+        self.hyper_params = cfg.hyperparams
+        self.epochs = self.hyper_params.max_epochs
+        self.early_stop_tol = self.hyper_params.early_stopping_tolerance
+        self.batch_size_train = self.hyper_params.batch_size
+        self.train_eval_step = self.hyper_params.evaluate_every_step
+        self.grad_clip_norm = self.hyper_params.grad_clip_norm
+        self.init_lr = self.hyper_params.initial_learning_rate
+        self.shuffle = self.hyper_params.shuffle
+        self.num_workers = self.hyper_params.num_workers
+        self.pin_memory = self.hyper_params.pin_memory
 
         # get dataset required by configuration
         ds_folder = paths.AMASS_PATH
@@ -80,8 +84,8 @@ class Trainer:
 
         # get training and validation dataset paths
         ds_dir = os.path.join(paths.DATA_PATH, ds_folder)
-        self.train_ds_path = os.path.join(ds_dir, paths.TRAIN_FILE)
-        self.valid_ds_path = os.path.join(ds_dir, paths.VALID_FILE)
+        self.train_ds_path = os.path.join(ds_dir, "training")
+        self.valid_ds_path = os.path.join(ds_dir, "validation")
 
         # load config of dataset
         self.ds_config = utils.load_config(ds_dir).dataset
@@ -104,11 +108,12 @@ class Trainer:
 
         # init network
         self.model = BiRNN(input_dim=input_dim, target_dim=target_dim).to(self.device)
+        print("Trainable parameters: {}".format(count_parameters(self.model)))
         # print(self.model)
 
         # init loss fct and optimizer
-        self.loss_fn = torch.nn.GaussianNLLLoss(reduction="sum")
-        self.optimizer = torch.optim.Adam(self.model.parameters())
+        self.loss_fn = torch.nn.GaussianNLLLoss(reduction="sum", full=True)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.init_lr)
         # work-around to get exponentially decaying rate at every step instead of stairs
         lr_gamma = pow(0.96, 1 / 2000)
         self.lr_scheduler = torch.optim.lr_scheduler.StepLR(
@@ -119,7 +124,7 @@ class Trainer:
         self.step_count = 0  # count number of training steps (x-axis in tensorboard)
 
         # tensorboard setup
-        time_stamp = datetime.datetime.now().strftime("%Y.%m.%d-%H:%M")
+        time_stamp = datetime.datetime.now().strftime("%y%m%d%H%M")
         self.experiment_name = "-".join(
             [
                 time_stamp,
@@ -131,45 +136,28 @@ class Trainer:
         self.writer = SummaryWriter(self.model_path)
 
         # create datasets
-        train_ds = (
-            WebDataset(
-                self.train_ds_path,
-                shardshuffle=True,
-                length=self.train_ds_size,
-            )
-            .decode()
-            .to_tuple(
-                "ori.npy",
-                "acc.npy",
-                "pose.npy",
-            )
-        )
-        valid_ds = (
-            WebDataset(
-                self.valid_ds_path,
-                shardshuffle=False,
-                length=self.valid_ds_size,
-            )
-            .decode()
-            .to_tuple(
-                "ori.npy",
-                "acc.npy",
-                "pose.npy",
-            )
-        )
-
-        # create specific dataloaders for training (batched sequences) and validation (unrolled sequences)
+        train_ds = utils.BigDataset(self.train_ds_path, self.train_ds_size)
+        generator = torch.Generator()
+        generator.manual_seed(seed)
         self.train_dl = DataLoader(
             train_ds,
             batch_size=self.batch_size_train,
-            drop_last=True,
+            shuffle=self.shuffle,
+            generator=generator,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
         )
-        self.valid_dl = DataLoader(valid_ds)
+
+        valid_ds = utils.BigDataset(self.valid_ds_path, self.valid_ds_size)
+        self.valid_dl = DataLoader(
+            valid_ds,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+        )
 
     def train(self):
         print("Starting experiment: {}".format(self.experiment_name))
         # train and validate model iteratively
-        valid_loss = np.inf
         best_valid_loss = np.inf
         num_steps_wo_improvement = 0
         stop_signal = False
@@ -180,7 +168,8 @@ class Trainer:
             print("\nEpoch {}\n-------------------------------".format(epoch + 1))
 
             # iterate over all sample batches in epoch
-            for batch_num, (ori, acc, pose) in enumerate(self.train_dl):
+            for batch_num, (ori, acc, pose, _) in enumerate(self.train_dl):
+
                 input_vec, target_vec = utils.assemble_input_target(
                     ori, acc, pose, self.sens_ind
                 )
@@ -200,6 +189,7 @@ class Trainer:
 
                 # evaluate after every train_eval_step
                 if self.step_count % self.train_eval_step == 0:
+
                     valid_loss = self.validate()
 
                     # early stopping
@@ -248,6 +238,7 @@ class Trainer:
         # compile target config to dump with model checkpoint
         trgt_config = OmegaConf.create()
         trgt_config.experiment = train_config
+        trgt_config.hyperparameters = self.hyper_params
         trgt_config.dataset = self.ds_config
 
         utils.write_config(path=self.model_path, config=trgt_config)
@@ -255,6 +246,7 @@ class Trainer:
     def training_step(self, epoch, batch_num, x, y):
         self.model.train()
 
+        # push CPU-loaded vectors to GPU (pin_memory -> True)
         x, y = x.to(self.device).float(), y.to(self.device).float()
 
         # make predictions for full batch at once (state is reset after every sample in batch)
@@ -276,16 +268,24 @@ class Trainer:
         self.optimizer.zero_grad()
         loss.backward()
 
-        # # DEBUG: print gradient norms
-        # for name, param in model.named_parameters():
-        #     print(name, param.grad.norm())
+        # DEBUG: print difference in gradient norms after clipping
+        # norms = []
+        # for name, param in self.model.named_parameters():
+        #     # print(name, float(param.grad.norm()))
+        #     norms.append(float(param.grad.norm()))
 
-        # clip gradients: very little effect
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip_norm)
+        # clip gradients: only has effect for 1 and below (and if learning rate is larger than e-4)
+        total_norm = 0
+        if self.grad_clip_norm != 0:
+            total_norm = torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(), self.grad_clip_norm
+            )
+        self.writer.add_scalar("training/total_norm", total_norm, self.step_count)
 
-        # # DEBUG: print gradient norms
-        # for name, param in model.named_parameters():
-        #     print(name, param.grad.norm())
+        # DEBUG: print difference in gradient norms after clipping
+        # for i, (name, param) in enumerate(self.model.named_parameters()):
+        #     # print(name, float(param.grad.norm()))
+        #     print(norms[i] - float(param.grad.norm()))
 
         # weight update
         self.optimizer.step()
@@ -308,9 +308,10 @@ class Trainer:
             y[..., self.pose_dim :].contiguous(),
         )
 
-        # compute loss for pose and acceleration reconstruction individually
-        loss_smpl = self.loss_fn(smpl_mean, smpl_y, smpl_std) / torch.numel(y)
-        loss_acc = self.loss_fn(acc_mean, acc_y, acc_std) / torch.numel(y)
+        # reduce loss to average per frame (seq_len) and samples (batch_size)
+        divisor = y.shape[0] * y.shape[1]
+        loss_smpl = self.loss_fn(smpl_mean, smpl_y, torch.square(smpl_std)) / divisor
+        loss_acc = self.loss_fn(acc_mean, acc_y, torch.square(acc_std)) / divisor
         loss = loss_smpl + loss_acc
 
         return loss, loss_smpl.item(), loss_acc.item()
@@ -330,7 +331,13 @@ class Trainer:
         loss_acc = 0
         print("\nValidating:")
         with torch.no_grad():
-            for sample, (ori, acc, pose) in enumerate(self.valid_dl):
+            for sample, (ori, acc, pose, _) in enumerate(self.valid_dl):
+                # DEBUG: check that batches are shuffled over epochs
+                # print(
+                #     "{:.3f}, {:.3f}, {:.3f}".format(
+                #         np.linalg.norm(ori), np.linalg.norm(acc), np.linalg.norm(pose)
+                #     )
+                # )
                 input_vec, target_vec = utils.assemble_input_target(
                     ori, acc, pose, self.sens_ind
                 )
@@ -357,9 +364,20 @@ class Trainer:
         loss /= self.valid_ds_size
         loss_smpl /= self.valid_ds_size
         loss_acc /= self.valid_ds_size
-        # TODO: change to "validation" before starting training for real
-        self.log_loss(loss, loss_smpl, loss_acc, "testing")
+        self.log_loss(loss, loss_smpl, loss_acc, "validation")
+
+        # console output
+        print(
+            "\nValid SMPL loss: {:.3f}, Valid ACC loss: {:.3f}\n".format(
+                loss_smpl_i, loss_acc_i
+            )
+        )
+        # only SMPL loss is used for validation
         return loss_smpl
+
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
 @hydra.main(config_path="conf", config_name="training")
@@ -368,8 +386,8 @@ def do_training(cfg: DictConfig):
         trainer = Trainer(cfg=cfg)
         trainer.train()
     except KeyboardInterrupt:
-        print("Interrupted. Deleting model_folder!")
-        shutil.rmtree(trainer.model_path)
+        # print("Interrupted. Deleting model_folder!")
+        # shutil.rmtree(trainer.model_path)
         sys.exit()
 
     # evaluate trained model right away

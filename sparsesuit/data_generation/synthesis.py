@@ -1,16 +1,18 @@
 """ A script to handle the synthesis of IMU data from 17 sensors based on the AMASS dataset of SMPL pose data. """
 import os
-from pathlib import Path
-import pymusim
-import numpy as np
 import pickle as pkl
+from pathlib import Path
+
 import hydra
-from omegaconf import DictConfig
-from sparsesuit.constants import paths, sensors
-from sparsesuit.utils import smpl_helpers, visualization, utils
+import numpy as np
+import pymusim
 import torch
 import torch.nn.functional as F
+from omegaconf import DictConfig
+
 from normalization import Normalizer
+from sparsesuit.constants import paths, sensors
+from sparsesuit.utils import smpl_helpers, visualization, utils
 
 
 class Synthesizer:
@@ -188,9 +190,6 @@ class Synthesizer:
             oris.append(np.expand_dims(A[:, idx, :3, :3], axis=1))
         orientation = np.concatenate(oris, axis=1)
 
-        # compute accelerations from subsequent frames and add noise with IMUsim
-        acceleration = []
-
         # IMU sim for noise
         sensor_opt = pymusim.SensorOptions()
         sensor_opt.set_gravity_axis(-1)  # disable additive gravity
@@ -198,7 +197,10 @@ class Synthesizer:
             sensor_opt.set_white_noise(self.acc_noise)
         sensor = pymusim.BaseSensor(sensor_opt)
 
-        time_interval = 1.0 / self.fps * self.acc_delta
+        # compute accelerations from subsequent frames and add noise with IMUsim
+        acceleration = []
+
+        time_interval = self.acc_delta / self.fps
         total_number_frames = len(A)
         for idx in range(self.acc_delta, total_number_frames - self.acc_delta):
             vertex_0 = vertices_IMU[idx - self.acc_delta].astype(float)  # 6*3
