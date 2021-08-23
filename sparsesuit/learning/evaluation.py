@@ -1,20 +1,55 @@
 import os
 
+import cv2
+import hydra
 import numpy as np
 import procrustes
-from webdataset import WebDataset
-from welford import Welford
-import cv2
-
-from sparsesuit.utils import utils, smpl_helpers, visualization
-from sparsesuit.learning import models
-from sparsesuit.constants import paths, sensors
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
-
-import hydra
 from omegaconf import DictConfig, OmegaConf
+from torch.utils.data import DataLoader
+from welford import Welford
+
+from sparsesuit.constants import paths, sensors
+from sparsesuit.learning import models
+from sparsesuit.utils import utils, smpl_helpers, visualization
+
+
+def joint_angle_error(predicted_pose_params, target_pose_params):
+    """
+    Computes the distance in joint angles in degrees between predicted and target joints for every given frame. Currently,
+    this function can only handle input pose parameters represented as rotation matrices.
+
+    :param predicted_pose_params: An np array of shape `(seq_length, dof)` where `dof` is 216, i.e. a 3-by-3 rotation
+      matrix for each of the 24 joints.
+    :param target_pose_params: An np array of the same shape as `predicted_pose_params` representing the target poses.
+    :return: An np array of shape `(seq_length, 24)` containing the joint angle error in Radians for each joint.
+    """
+    seq_length, dof = predicted_pose_params.shape[0], predicted_pose_params.shape[1]
+    # assert dof == 216, "unexpected number of degrees of freedom"
+    # assert (
+    #     target_pose_params.shape[0] == seq_length and target_pose_params.shape[1] == dof
+    # ), "target_pose_params must match predicted_pose_params"
+
+    # reshape to have rotation matrices explicit
+    n_joints = dof // 9
+    p1 = np.reshape(predicted_pose_params, [-1, n_joints, 3, 3])
+    p2 = np.reshape(target_pose_params, [-1, n_joints, 3, 3])
+
+    # compute R1 * R2.T, if prediction and target match, this will be the identity matrix
+    r1 = np.reshape(p1, [-1, 3, 3])
+    r2 = np.reshape(p2, [-1, 3, 3])
+    r2t = np.transpose(r2, [0, 2, 1])
+    r = np.matmul(r1, r2t)
+
+    # convert `r` to angle-axis representation and extract the angle, which is our measure of difference between
+    # the predicted and target orientations
+    angles = []
+    for i in range(r1.shape[0]):
+        aa, _ = cv2.Rodrigues(r[i])
+        angles.append(utils.rad2deg(np.linalg.norm(aa)))
+
+    return np.reshape(np.array(angles), [seq_length, n_joints])
 
 
 class Evaluator:
@@ -84,10 +119,11 @@ class Evaluator:
 
         # get test dataset paths
         ds_dir = os.path.join(paths.DATA_PATH, ds_folder)
-        test_ds_path = os.path.join(ds_dir, paths.TEST_FILE)
+        test_ds_path = os.path.join(ds_dir, "test")
 
         test_ds_config = utils.load_config(ds_dir).dataset
         test_ds_size = test_ds_config.assets.test
+        self.ds_fps = test_ds_config.fps
 
         # get indices of sensors the model was trained with in evaluation dataset
         test_ds_sens = test_ds_config.sensors
@@ -104,18 +140,15 @@ class Evaluator:
             stats = dict(data)
         self.pose_mean, self.pose_std = stats["pose_mean"], stats["pose_std"]
 
-        test_ds = (
-            WebDataset(test_ds_path, length=test_ds_size)
-            .decode()
-            .to_tuple("ori.npy", "acc.npy", "pose.npy")
-        )
-        self.test_dl = DataLoader(test_ds)
+        test_ds = utils.BigDataset(test_ds_path, test_ds_size)
+        self.test_dl = DataLoader(test_ds, num_workers=4, pin_memory=True)
 
     def evaluate(self):
         # set up error statistics
         stats_pos_err = Welford()
         stats_ang_err = Welford()
         stats_loss = Welford()
+        stats_jerk = Welford()
 
         # iterate over test dataset
         with torch.no_grad():
@@ -142,10 +175,12 @@ class Evaluator:
                     pred_mean, pred_std = self.predict_window(x)
 
                 # compute loss
-                loss = F.gaussian_nll_loss(pred_mean, y, pred_std)
+                loss = F.gaussian_nll_loss(
+                    pred_mean, y, pred_std, full=True, reduction="sum"
+                ) / (y.shape[0] * y.shape[1])
                 stats_loss.add(loss.cpu().detach().numpy())
 
-                print("Loss: {:.2f}".format(loss))
+                # print("Loss: {:.2f}".format(loss))
 
                 # extract poses from predictions
                 pose_pred_norm = pred_mean[:, :, : self.pose_dim].cpu().detach().numpy()
@@ -180,67 +215,85 @@ class Evaluator:
                     targ_k = [
                         pose_trgt_full[0][k * max_chunk_size : (k + 1) * max_chunk_size]
                     ]
-                    ang_err, pos_err = self.compute_metrics(pred_k, targ_k)
+                    ang_err, pos_err, jerk = self.compute_metrics(pred_k, targ_k)
 
                     # add errors to stats
-                    for i in range(len(ang_err)):
-                        stats_ang_err.add(ang_err[i])
-                        stats_pos_err.add(pos_err[i])
+                    for ang_err_i, pos_err_i in zip(ang_err, pos_err):
+                        stats_ang_err.add(ang_err_i)
+                        stats_pos_err.add(pos_err_i)
+
+                    for jerk_i in jerk:
+                        stats_jerk.add(jerk_i)
 
         # summarize errors
-        avg_ang_err = np.mean(stats_ang_err.mean[sensors.ANG_EVAL_JOINTS])
-        std_ang_err = np.mean(np.sqrt(stats_ang_err.var_p[sensors.ANG_EVAL_JOINTS]))
-
-        avg_pos_err = np.mean(stats_pos_err.mean[sensors.POS_EVAL_JOINTS])
-        std_pos_err = np.mean(np.sqrt(stats_pos_err.var_p[sensors.POS_EVAL_JOINTS]))
-
-        avg_loss = stats_loss.mean
-        std_loss = np.sqrt(stats_loss.var_p)
+        metrics = {
+            "avg_sip_ang_err": round(
+                float(np.mean(stats_ang_err.mean[sensors.ANG_EVAL_JOINTS])), 2
+            ),
+            "std_sip_ang_err": round(
+                float(np.mean(np.sqrt(stats_ang_err.var_p[sensors.ANG_EVAL_JOINTS]))), 2
+            ),
+            "avg_total_ang_err": round(float(np.mean(stats_ang_err.mean)), 2),
+            "std_total_ang_err": round(float(np.mean(np.sqrt(stats_ang_err.var_p))), 2),
+            "avg_sip_pos_err": round(
+                float(np.mean(stats_pos_err.mean[sensors.POS_EVAL_JOINTS])), 2
+            ),
+            "std_sip_pos_err": round(
+                float(np.mean(np.sqrt(stats_pos_err.var_p[sensors.POS_EVAL_JOINTS]))), 2
+            ),
+            "avg_total_pos_err": round(float(np.mean(stats_pos_err.mean)), 2),
+            "std_total_pos_err": round(float(np.mean(np.sqrt(stats_pos_err.var_p))), 2),
+            "avg_loss": round(float(stats_loss.mean), 2),
+            "std_loss": round(float(np.sqrt(stats_loss.var_p)), 2),
+            "avg_jerk": round(float(np.mean(stats_jerk.mean) / 100), 2),
+            "std_jerk": round(float(np.mean(np.sqrt(stats_jerk.var_p)) / 100), 2),
+        }
 
         print(
-            "Average joint angle error (deg): {:.2f} (+/- {:.2f})".format(
-                avg_ang_err, std_ang_err
+            "Average SIP joint angle error (deg): {:.2f} (+/- {:.2f})".format(
+                metrics["avg_sip_ang_err"], metrics["std_sip_ang_err"]
             )
         )
         print(
-            "Average joint position error (cm): {:.2f} (+/- {:.2f})".format(
-                avg_pos_err, std_pos_err
+            "Average total joint angle error (deg): {:.2f} (+/- {:.2f})".format(
+                metrics["avg_total_ang_err"], metrics["std_total_ang_err"]
             )
         )
-        print("Average loss: {:.2f} (+/- {:.2f})".format(avg_loss, std_loss))
-
-        self.write_config(
-            avg_ang_err,
-            std_ang_err,
-            avg_pos_err,
-            std_pos_err,
-            avg_loss,
-            std_loss,
+        print(
+            "Average SIP joint position error (cm): {:.2f} (+/- {:.2f})".format(
+                metrics["avg_sip_pos_err"], metrics["std_sip_pos_err"]
+            )
+        )
+        print(
+            "Average total joint position error (cm): {:.2f} (+/- {:.2f})".format(
+                metrics["avg_total_pos_err"], metrics["std_total_pos_err"]
+            )
+        )
+        print(
+            "Average loss: {:.2f} (+/- {:.2f})".format(
+                metrics["avg_loss"], metrics["std_loss"]
+            )
         )
 
-    def write_config(
-        self,
-        avg_ang_err,
-        std_ang_err,
-        avg_pos_err,
-        std_pos_err,
-        avg_loss,
-        std_loss,
-    ):
+        print(
+            "Average jerk (100m/s^3): {:.2f} (+/- {:.2f})".format(
+                metrics["avg_jerk"], metrics["std_jerk"]
+            )
+        )
+
+        self.write_config(metrics)
+
+    def write_config(self, metrics):
         # load evaluation configuration
         eval_config = OmegaConf.create(self.eval_config)
 
-        # add stats to training config
-        eval_config.mean_ang_err = round(float(avg_ang_err), 2)
-        eval_config.std_ang_err = round(float(std_ang_err), 2)
-        eval_config.mean_pos_err = round(float(avg_pos_err), 2)
-        eval_config.std_pos_err = round(float(std_pos_err), 2)
-        eval_config.mean_loss = round(float(avg_loss), 2)
-        eval_config.std_loss = round(float(std_loss), 2)
+        # add error metrics to eval config
+        eval_config.metrics = metrics
 
         # compile target config to dump with model checkpoint
         trgt_config = OmegaConf.create()
         trgt_config.experiment = self.train_config.experiment
+        trgt_config.hyperparameters = self.train_config.hyperparameters
         trgt_config.evaluation = eval_config
         trgt_config.dataset = self.train_config.dataset
 
@@ -290,52 +343,18 @@ class Evaluator:
         targ_g = smpl_helpers.smpl_rot_to_global(targ)
 
         # compute angle error for all SMPL joints
-        angle_err = self.joint_angle_error(pred_g, targ_g)
+        # TODO: why feed global rotations here? Wouldn't that accumulate error along kinematic chains?
+        angle_err = joint_angle_error(pred_g, targ_g)
 
         # compute positional error for all SMPL joints (optional as computationally heavy)
+        # TODO: get jerk and visualization out of joint_pos_error
         if compute_positional_error:
-            pos_err = self.joint_pos_error(pred, targ)
+            pos_err, jerk = self.joint_pos_error(pred, targ)
         else:
             pos_err = np.zeros(angle_err.shape)
+            jerk = np.zeros(angle_err.shape)
 
-        return angle_err, pos_err
-
-    def joint_angle_error(self, predicted_pose_params, target_pose_params):
-        """
-        Computes the distance in joint angles in degrees between predicted and target joints for every given frame. Currently,
-        this function can only handle input pose parameters represented as rotation matrices.
-
-        :param predicted_pose_params: An np array of shape `(seq_length, dof)` where `dof` is 216, i.e. a 3-by-3 rotation
-          matrix for each of the 24 joints.
-        :param target_pose_params: An np array of the same shape as `predicted_pose_params` representing the target poses.
-        :return: An np array of shape `(seq_length, 24)` containing the joint angle error in Radians for each joint.
-        """
-        seq_length, dof = predicted_pose_params.shape[0], predicted_pose_params.shape[1]
-        assert dof == 216, "unexpected number of degrees of freedom"
-        assert (
-            target_pose_params.shape[0] == seq_length
-            and target_pose_params.shape[1] == dof
-        ), "target_pose_params must match predicted_pose_params"
-
-        # reshape to have rotation matrices explicit
-        n_joints = dof // 9
-        p1 = np.reshape(predicted_pose_params, [-1, n_joints, 3, 3])
-        p2 = np.reshape(target_pose_params, [-1, n_joints, 3, 3])
-
-        # compute R1 * R2.T, if prediction and target match, this will be the identity matrix
-        r1 = np.reshape(p1, [-1, 3, 3])
-        r2 = np.reshape(p2, [-1, 3, 3])
-        r2t = np.transpose(r2, [0, 2, 1])
-        r = np.matmul(r1, r2t)
-
-        # convert `r` to angle-axis representation and extract the angle, which is our measure of difference between
-        # the predicted and target orientations
-        angles = []
-        for i in range(r1.shape[0]):
-            aa, _ = cv2.Rodrigues(r[i])
-            angles.append(utils.rad2deg(np.linalg.norm(aa)))
-
-        return np.reshape(np.array(angles), [seq_length, n_joints])
+        return angle_err, pos_err, jerk
 
     def joint_pos_error(self, predicted_pose_params, target_pose_params):
         # compute 3d joint positions for prediction and target
@@ -389,6 +408,10 @@ class Evaluator:
         pred_joints_sel = pred_joints_np[:, : sensors.NUM_SMPL_JOINTS]
         targ_joints_sel = targ_joints_np[:, : sensors.NUM_SMPL_JOINTS]
 
+        # compute jerk for all SMPL joints
+        jerk_delta = 4
+        jerk = utils.compute_jerk(pred_joints_sel, jerk_delta, self.ds_fps)
+
         # rotationally align joints via Procrustes
         pred_verts_aligned = []
         pred_joints_aligned = []
@@ -428,9 +451,10 @@ class Evaluator:
                 play_frames=300,
                 playback_speed=0.3,
                 add_captions=True,
+                side_by_side=True,
             )
 
-        return mm * 100  # convert m to cm
+        return mm * 100, jerk  # convert m to cm
 
 
 @hydra.main(config_path="conf", config_name="evaluation")

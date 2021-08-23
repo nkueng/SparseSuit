@@ -1,9 +1,9 @@
-import numpy as np
-import smplx
-from smplx import lbs
 import os
 
+import numpy as np
+import smplx
 import torch
+from smplx import lbs
 
 from sparsesuit.constants import paths, sensors
 

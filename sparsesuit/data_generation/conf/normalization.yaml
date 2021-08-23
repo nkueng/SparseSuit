@@ -2,6 +2,7 @@ dataset:
   config: SSP
   type: synthetic
   noise: True
+  tar: False
 visualize: False
 debug: True
 

@@ -1,9 +1,11 @@
+import os
+
+import cv2
 import numpy as np
 import quaternion
-import cv2
-import os
-from omegaconf import OmegaConf
 import torch
+from omegaconf import OmegaConf
+from torch.utils.data import Dataset
 
 
 def write_config(path, config):
@@ -78,8 +80,43 @@ def assemble_input_target(orientation, acceleration, pose, sens_ind):
     return input_vec, target_vec
 
 
+def compute_jerk(data, delta: int, fps: int):
+    interval = delta / fps
+    res = []
+    for i in range(2 * delta, len(data) - 2 * delta):
+        res.append(
+            (
+                -0.5 * data[i - 2 * delta]
+                + data[i - delta]
+                - data[i + delta]
+                + 0.5 * data[i + 2 * delta]
+            )
+            / pow(interval, 3)
+        )
+    return np.linalg.norm(res, axis=2)
+
+
 def rad2deg(v):
     """
     Convert from radians to degrees.
     """
     return v * 180.0 / np.pi
+
+
+class BigDataset(Dataset):
+    def __init__(self, path, length):
+        self.path = path
+        self.length = length
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, index):
+        if 0 <= index < self.length:
+            item_path = os.path.join(self.path, str(index))
+            filename = os.listdir(item_path)[0]
+            with np.load(os.path.join(item_path, filename), allow_pickle=True) as data:
+                data_in = dict(data)
+            return data_in["ori"], data_in["acc"], data_in["pose"], filename
+        else:
+            raise IndexError("Index not in dataset. Abort!")
