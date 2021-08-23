@@ -8,9 +8,15 @@ MAC_DATA_PATH = "/Volumes/SSD500/IMU_data/"
 
 # linux dir
 LINUX_DATA_PATH = "/media/nic/Extreme SSD/IMU_data/"
+CLUSTER_DATA_PATH = "/IMU_data/"
 
 # root data path depending on platform; all paths should start here
-DATA_PATH = MAC_DATA_PATH if ON_MAC else LINUX_DATA_PATH
+if ON_MAC:
+    DATA_PATH = MAC_DATA_PATH
+elif platform.node() == "nic-RKK":
+    DATA_PATH = LINUX_DATA_PATH
+else:
+    DATA_PATH = CLUSTER_DATA_PATH
 
 ## dataset paths
 # synthetic data
