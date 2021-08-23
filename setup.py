@@ -20,5 +20,8 @@ setup(
         "pyrender",
         "trimesh",
         "welford",
+        "opencv-python",
+        "numpy-quaternion",
+        "numba",
     ],
 )

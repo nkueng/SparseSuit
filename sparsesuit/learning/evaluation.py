@@ -12,7 +12,7 @@ from welford import Welford
 
 from sparsesuit.constants import paths, sensors
 from sparsesuit.learning import models
-from sparsesuit.utils import utils, smpl_helpers, visualization
+from sparsesuit.utils import utils, smpl_helpers
 
 
 def joint_angle_error(predicted_pose_params, target_pose_params):
@@ -26,10 +26,10 @@ def joint_angle_error(predicted_pose_params, target_pose_params):
     :return: An np array of shape `(seq_length, 24)` containing the joint angle error in Radians for each joint.
     """
     seq_length, dof = predicted_pose_params.shape[0], predicted_pose_params.shape[1]
-    # assert dof == 216, "unexpected number of degrees of freedom"
-    # assert (
-    #     target_pose_params.shape[0] == seq_length and target_pose_params.shape[1] == dof
-    # ), "target_pose_params must match predicted_pose_params"
+    assert dof == 216, "unexpected number of degrees of freedom"
+    assert (
+        target_pose_params.shape[0] == seq_length and target_pose_params.shape[1] == dof
+    ), "target_pose_params must match predicted_pose_params"
 
     # reshape to have rotation matrices explicit
     n_joints = dof // 9
@@ -152,7 +152,7 @@ class Evaluator:
 
         # iterate over test dataset
         with torch.no_grad():
-            for batch_num, (ori, acc, pose_trgt_norm) in enumerate(self.test_dl):
+            for batch_num, (ori, acc, pose_trgt_norm, _) in enumerate(self.test_dl):
                 print(
                     "computing metrics on asset {} with {} frames".format(
                         batch_num, ori.shape[1]
@@ -342,8 +342,8 @@ class Evaluator:
         pred_g = smpl_helpers.smpl_rot_to_global(pred)
         targ_g = smpl_helpers.smpl_rot_to_global(targ)
 
-        # compute angle error for all SMPL joints
-        # TODO: why feed global rotations here? Wouldn't that accumulate error along kinematic chains?
+        # compute angle error for all SMPL joints based on global joint orientation
+        # this way the error is not propagated along the kinematic chain
         angle_err = joint_angle_error(pred_g, targ_g)
 
         # compute positional error for all SMPL joints (optional as computationally heavy)
@@ -429,6 +429,8 @@ class Evaluator:
         mm = np.linalg.norm(np.asarray(pred_joints_aligned) - targ_joints_sel, axis=2)
 
         if self.visualize:
+            from sparsesuit.utils import visualization
+
             verts = [targ_verts_np, np.asarray(pred_verts_aligned)]
             vertex_colors = ["green", "orange"]
             joints = [targ_joints_np, np.asarray(pred_joints_aligned)]
