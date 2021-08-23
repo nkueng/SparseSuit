@@ -13,7 +13,7 @@ source venv/bin/activate
 pip install -e .
 cd ..
 
-# install pymusim
+# install pymusim (required only for data synthesis)
 git clone git@github.com:Rokoko/IMUsimulator.git
 cd IMUsimulator
 mkdir build && cd build
