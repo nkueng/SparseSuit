@@ -1,0 +1,20 @@
+name: asym15
+explanation: which sensors contribute more, the ones further in or further down the kinematic chains? This experiment is a mix of the two extremes
+config: SSP
+count: 15
+sensors:
+  - left_back
+  - right_back
+  - left_collar
+  - right_collar
+  - head
+  - right_shoulder
+  - left_elbow
+  - left_wrist
+  - right_wrist
+  - right_hip
+  - left_knee
+  - left_ankle
+  - right_ankle
+dataset: synthetic
+noise: False
