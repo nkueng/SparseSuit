@@ -1,3 +1,4 @@
+import logging
 import os
 
 import cv2
@@ -54,7 +55,6 @@ def joint_angle_error(predicted_pose_params, target_pose_params):
 
 class Evaluator:
     def __init__(self, cfg):
-        print("Evaluation\n*******************\n")
         self.eval_config = cfg.evaluation
         self.visualize = cfg.visualize
         self.past_frames = self.eval_config.past_frames
@@ -66,7 +66,13 @@ class Evaluator:
 
         # cuda setup
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        print("Using {} device".format(self.device))
+
+        # logger setup
+        log_level = logging.DEBUG if cfg.debug else logging.INFO
+        utils.configure_logger(self.exp_path, level=log_level)
+        self.logger = logging.getLogger("evaluation")
+        print("Evaluation\n*******************\n")
+        self.logger.info("Using {} device".format(self.device))
 
         # load neutral smpl model for joint position evaluation
         self.smpl_model = smpl_helpers.load_smplx(["neutral"])["neutral"]
@@ -153,7 +159,7 @@ class Evaluator:
         # iterate over test dataset
         with torch.no_grad():
             for batch_num, (ori, acc, pose_trgt_norm, _) in enumerate(self.test_dl):
-                print(
+                self.logger.info(
                     "computing metrics on asset {} with {} frames".format(
                         batch_num, ori.shape[1]
                     )
@@ -180,7 +186,7 @@ class Evaluator:
                 ) / (y.shape[0] * y.shape[1])
                 stats_loss.add(loss.cpu().detach().numpy())
 
-                # print("Loss: {:.2f}".format(loss))
+                self.logger.debug("Loss: {:.2f}".format(loss))
 
                 # extract poses from predictions
                 pose_pred_norm = pred_mean[:, :, : self.pose_dim].cpu().detach().numpy()
@@ -249,33 +255,33 @@ class Evaluator:
             "std_jerk": round(float(np.mean(np.sqrt(stats_jerk.var_p)) / 100), 2),
         }
 
-        print(
+        self.logger.info(
             "Average SIP joint angle error (deg): {:.2f} (+/- {:.2f})".format(
                 metrics["avg_sip_ang_err"], metrics["std_sip_ang_err"]
             )
         )
-        print(
+        self.logger.info(
             "Average total joint angle error (deg): {:.2f} (+/- {:.2f})".format(
                 metrics["avg_total_ang_err"], metrics["std_total_ang_err"]
             )
         )
-        print(
+        self.logger.info(
             "Average SIP joint position error (cm): {:.2f} (+/- {:.2f})".format(
                 metrics["avg_sip_pos_err"], metrics["std_sip_pos_err"]
             )
         )
-        print(
+        self.logger.info(
             "Average total joint position error (cm): {:.2f} (+/- {:.2f})".format(
                 metrics["avg_total_pos_err"], metrics["std_total_pos_err"]
             )
         )
-        print(
+        self.logger.info(
             "Average loss: {:.2f} (+/- {:.2f})".format(
                 metrics["avg_loss"], metrics["std_loss"]
             )
         )
 
-        print(
+        self.logger.info(
             "Average jerk (100m/s^3): {:.2f} (+/- {:.2f})".format(
                 metrics["avg_jerk"], metrics["std_jerk"]
             )

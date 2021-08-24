@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 import random
 import sys
@@ -25,19 +26,36 @@ torch.manual_seed(seed)
 
 class Trainer:
     def __init__(self, cfg):
-        print("Training\n*******************\n")
         self.cfg = cfg
-        print(OmegaConf.to_yaml(cfg))
 
         # cuda setup
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        print("Using {} device".format(self.device))
 
         # experiment setup
         train_config = cfg.experiment
         self.exp_name = train_config.name
         train_sens = train_config.sensors
         num_train_sens = train_config.count
+
+        # tensorboard setup
+        time_stamp = datetime.datetime.now().strftime("%y%m%d%H%M")
+        self.experiment_name = "-".join(
+            [
+                time_stamp,
+                self.exp_name,
+                train_config.config + str(num_train_sens),
+            ]
+        )
+        self.model_path = os.path.join(os.getcwd(), "runs/" + self.experiment_name)
+        self.writer = SummaryWriter(self.model_path)
+
+        # logger setup
+        log_level = logging.DEBUG if cfg.debug else logging.INFO
+        utils.configure_logger(self.model_path, level=log_level)
+        self.logger = logging.getLogger("training")
+        print("Training\n*******************\n")
+        self.logger.info("Using {} device".format(self.device))
+        self.logger.info(OmegaConf.to_yaml(cfg))
 
         # hyper-parameters
         self.hyper_params = cfg.hyperparams
@@ -108,8 +126,8 @@ class Trainer:
 
         # init network
         self.model = BiRNN(input_dim=input_dim, target_dim=target_dim).to(self.device)
-        print("Trainable parameters: {}".format(count_parameters(self.model)))
-        # print(self.model)
+        self.logger.info("Trainable parameters: {}".format(count_parameters(self.model)))
+        # self.logger.info(self.model)
 
         # init loss fct and optimizer
         self.loss_fn = torch.nn.GaussianNLLLoss(reduction="sum", full=True)
@@ -122,18 +140,6 @@ class Trainer:
             gamma=lr_gamma,
         )
         self.step_count = 0  # count number of training steps (x-axis in tensorboard)
-
-        # tensorboard setup
-        time_stamp = datetime.datetime.now().strftime("%y%m%d%H%M")
-        self.experiment_name = "-".join(
-            [
-                time_stamp,
-                self.exp_name,
-                train_config.config + str(num_train_sens),
-            ]
-        )
-        self.model_path = os.path.join(os.getcwd(), "runs/" + self.experiment_name)
-        self.writer = SummaryWriter(self.model_path)
 
         # create datasets
         train_ds = utils.BigDataset(self.train_ds_path, self.train_ds_size)
@@ -156,7 +162,7 @@ class Trainer:
         )
 
     def train(self):
-        print("Starting experiment: {}".format(self.experiment_name))
+        self.logger.info("Starting experiment: {}".format(self.experiment_name))
         # train and validate model iteratively
         best_valid_loss = np.inf
         num_steps_wo_improvement = 0
@@ -165,7 +171,7 @@ class Trainer:
 
         # iterate over epochs
         for epoch in range(self.epochs):
-            print("\nEpoch {}\n-------------------------------".format(epoch + 1))
+            self.logger.debug("\nEpoch {}\n-------------------------------".format(epoch + 1))
 
             # iterate over all sample batches in epoch
             for batch_num, (ori, acc, pose, _) in enumerate(self.train_dl):
@@ -195,7 +201,7 @@ class Trainer:
                     # early stopping
                     if valid_loss <= best_valid_loss:
                         # save model
-                        print("Saving model.")
+                        self.logger.debug("Saving model.")
                         torch.save(
                             self.model.state_dict(),
                             self.model_path + "/checkpoint.pt",
@@ -207,7 +213,7 @@ class Trainer:
 
                     if num_steps_wo_improvement == self.early_stop_tol:
                         stop_signal = True
-                        print(
+                        self.logger.info(
                             "No improvement for {} steps. Stopping early!".format(
                                 self.early_stop_tol
                             )
@@ -219,7 +225,7 @@ class Trainer:
 
         t1 = time.perf_counter()
         duration = t1 - t0
-        print("Done in {} seconds!\n".format(duration))
+        self.logger.info("Done in {} seconds!\n".format(duration))
 
         self.write_config(duration, epoch, best_valid_loss)
 
@@ -258,7 +264,7 @@ class Trainer:
 
         # console output
         current = (batch_num + 1) * len(y)
-        print(
+        self.logger.debug(
             "{}. Epoch: {}. SMPL loss: {:.3f}, ACC loss: {:.3f} [{}/{}]".format(
                 epoch + 1, batch_num, loss_smpl, loss_acc, current, self.train_ds_size
             )
@@ -329,15 +335,10 @@ class Trainer:
         loss = 0
         loss_smpl = 0
         loss_acc = 0
-        print("\nValidating:")
+        self.logger.debug("\nValidating:")
         with torch.no_grad():
             for sample, (ori, acc, pose, _) in enumerate(self.valid_dl):
-                # DEBUG: check that batches are shuffled over epochs
-                # print(
-                #     "{:.3f}, {:.3f}, {:.3f}".format(
-                #         np.linalg.norm(ori), np.linalg.norm(acc), np.linalg.norm(pose)
-                #     )
-                # )
+
                 input_vec, target_vec = utils.assemble_input_target(
                     ori, acc, pose, self.sens_ind
                 )
@@ -350,7 +351,7 @@ class Trainer:
 
                 # console output
                 current = (sample + 1) * len(y)
-                print(
+                self.logger.debug(
                     "{}. SMPL loss: {:.3f}, ACC loss: {:.3f} [{}/{}]".format(
                         sample, loss_smpl_i, loss_acc_i, current, self.valid_ds_size
                     )
@@ -367,7 +368,7 @@ class Trainer:
         self.log_loss(loss, loss_smpl, loss_acc, "validation")
 
         # console output
-        print(
+        self.logger.info(
             "\nValid SMPL loss: {:.3f}, Valid ACC loss: {:.3f}\n".format(
                 loss_smpl_i, loss_acc_i
             )

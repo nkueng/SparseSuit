@@ -1,4 +1,6 @@
+import logging
 import os
+import sys
 
 import cv2
 import numpy as np
@@ -30,6 +32,17 @@ def str2gender(string):
                 return gender
 
     return None
+
+
+def configure_logger(log_path="logs/", level=logging.INFO):
+    logname = os.path.join(log_path, "log.txt")
+    os.makedirs(os.path.dirname(logname), exist_ok=True)
+    logging.basicConfig(filename=logname,
+                        format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                        datefmt='%d-%m-%Y %H:%M:%S',
+                        level=level
+                        )
+    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
 
 def aa_to_rot_matrix(data):
