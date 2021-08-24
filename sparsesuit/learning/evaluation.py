@@ -61,6 +61,7 @@ class Evaluator:
         self.future_frames = self.eval_config.future_frames
 
         # load training configuration of experiment
+        # TODO: makes this stable with file directory instead of working directory
         self.exp_path = os.path.join(os.getcwd(), "runs/", self.eval_config.experiment)
         self.train_config = utils.load_config(self.exp_path)
 
@@ -69,8 +70,7 @@ class Evaluator:
 
         # logger setup
         log_level = logging.DEBUG if cfg.debug else logging.INFO
-        utils.configure_logger(self.exp_path, level=log_level)
-        self.logger = logging.getLogger("evaluation")
+        self.logger = utils.configure_logger(name="evaluation", log_path=self.exp_path, level=log_level)
         print("Evaluation\n*******************\n")
         self.logger.info("Using {} device".format(self.device))
 

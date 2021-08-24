@@ -51,8 +51,7 @@ class Trainer:
 
         # logger setup
         log_level = logging.DEBUG if cfg.debug else logging.INFO
-        utils.configure_logger(self.model_path, level=log_level)
-        self.logger = logging.getLogger("training")
+        self.logger = utils.configure_logger(name="training", log_path=self.model_path, level=log_level)
         print("Training\n*******************\n")
         self.logger.info("Using {} device".format(self.device))
         self.logger.info(OmegaConf.to_yaml(cfg))
@@ -74,7 +73,7 @@ class Trainer:
         if cfg.debug:
             ds_folder += "_debug"
             self.exp_name = "debug"
-            self.epochs = 2
+            self.epochs = 1
             self.train_eval_step = 10
 
         if train_config.dataset == "synthetic":

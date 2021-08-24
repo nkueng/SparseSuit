@@ -1,7 +1,7 @@
 evaluation:
   experiment: 2021.08.18-12:11-sym15in-SSP15
   dataset: synthetic
-  noise: True
+  noise: False
   past_frames: 20
   future_frames: 5
 debug: False

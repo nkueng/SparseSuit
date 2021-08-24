@@ -34,7 +34,7 @@ def str2gender(string):
     return None
 
 
-def configure_logger(log_path="logs/", level=logging.INFO):
+def configure_logger(name, log_path="logs/", level=logging.INFO):
     logname = os.path.join(log_path, "log.txt")
     os.makedirs(os.path.dirname(logname), exist_ok=True)
     logging.basicConfig(filename=logname,
@@ -42,7 +42,10 @@ def configure_logger(log_path="logs/", level=logging.INFO):
                         datefmt='%d-%m-%Y %H:%M:%S',
                         level=level
                         )
-    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+    logger = logging.getLogger(name)
+    # make logger output to console
+    logger.addHandler(logging.StreamHandler(sys.stdout))
+    return logger
 
 
 def aa_to_rot_matrix(data):
