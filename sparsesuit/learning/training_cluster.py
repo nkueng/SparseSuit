@@ -11,7 +11,9 @@ from sparsesuit.learning.training import Trainer
 
 @hydra.main(config_path="conf", config_name="training_cluster")
 def do_training(cfg: DictConfig):
+    # reads hydra config to run on SLURM cluster
     env = submitit.JobEnvironment()
+
     try:
         trainer = Trainer(cfg=cfg)
         trainer.train()

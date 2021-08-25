@@ -1,0 +1,16 @@
+name: 11_1
+config: SSP
+count: 11
+sensors:
+  - head
+  - left_shoulder
+  - right_shoulder
+  - left_wrist
+  - right_wrist
+  - left_hip
+  - right_hip
+  - left_ankle
+  - right_ankle
+dataset: synthetic
+noise: False
+

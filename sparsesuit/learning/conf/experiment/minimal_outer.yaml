@@ -1,0 +1,12 @@
+name: minimal_outer
+config: SSP
+count: 7
+sensors:
+  - head
+  - left_wrist
+  - right_wrist
+  - left_ankle
+  - right_ankle
+dataset: synthetic
+noise: False
+
