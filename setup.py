@@ -23,5 +23,6 @@ setup(
         "opencv-python",
         "numpy-quaternion",
         "numba",
+        "hydra-submitit-launcher",
     ],
 )

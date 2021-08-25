@@ -1,4 +1,4 @@
-debug: True
+debug: False
 defaults:
  - experiment: baseline
  - hyperparams: default
@@ -11,16 +11,11 @@ defaults:
 hydra:
 #  setup for slurm
   launcher:
-    submitit_folder: null
-    timeout_min: 1  # just to check array, def: 300
+    timeout_min: 300
     cpus_per_task: 1
-    gpus_per_node: 1
-    tasks_per_node: 1
     mem_gb: 2
-    nodes: 1
-    additional_parameters: {"mail-user": "nickueng@gmail.com", "mail-type": "BEGIN,END,FAIL,TIME_LIMIT_80"}
-    array_parallelism: 256
-    setup: null
+    additional_parameters: {"partition": "gpu", "gres": "gpu:titanrtx:1", "mail-user": "nickueng@gmail.com", "mail-type": "BEGIN,END,FAIL,TIME_LIMIT_80"}
+    array_parallelism: 4
 
   run:
     dir: .
