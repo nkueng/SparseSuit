@@ -1,4 +1,4 @@
-name: asym15
+name: 15_asym_2
 explanation: which sensors contribute more, the ones further in or further down the kinematic chains? This experiment is a mix of the two extremes
 config: SSP
 count: 15

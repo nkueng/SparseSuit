@@ -43,7 +43,7 @@ class Trainer:
             [
                 time_stamp,
                 self.exp_name,
-                train_config.config + str(num_train_sens),
+                # train_config.config + str(num_train_sens),
             ]
         )
         self.model_path = os.path.join(os.getcwd(), "runs/" + self.experiment_name)

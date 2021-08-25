@@ -1,4 +1,4 @@
-name: sym15in
+name: 15_sym_in
 explanation: which sensors contribute more, the ones further in or further down the kinematic chains? This experiment drops the sensors closer to the core
 config: SSP
 count: 15
