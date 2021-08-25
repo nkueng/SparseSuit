@@ -140,7 +140,7 @@ class Trainer:
         )
         self.step_count = 0  # count number of training steps (x-axis in tensorboard)
 
-        # create datasets
+        # load datasets
         train_ds = utils.BigDataset(self.train_ds_path, self.train_ds_size)
         generator = torch.Generator()
         generator.manual_seed(seed)
