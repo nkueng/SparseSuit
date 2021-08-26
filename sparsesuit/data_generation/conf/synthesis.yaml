@@ -6,8 +6,9 @@ dataset:
   acc_noise: 0.0
   fps: 60
   smpl_genders: [male, female]
+  tar: False
 visualize: False
-debug: False
+debug: True
 skip_existing: True
 
 hydra:
