@@ -30,12 +30,12 @@ class Trainer:
 
         # experiment setup
         train_config = cfg.experiment
-        self.exp_name = train_config.name
+        self.exp_name = "debug" if cfg.debug else train_config.name
         train_sens = train_config.sensors
         num_train_sens = train_config.count
 
         # tensorboard setup
-        time_stamp = datetime.datetime.now().strftime("%y%m%d%H%M")
+        time_stamp = datetime.datetime.now().strftime("%y%m%d%H%M%S")
         self.experiment_name = "-".join(
             [
                 time_stamp,
@@ -71,8 +71,7 @@ class Trainer:
         ds_folder = paths.AMASS_PATH
         if cfg.debug:
             ds_folder += "_debug"
-            self.exp_name = "debug"
-            self.epochs = 1
+            self.epochs = 2
             self.train_eval_step = 10
 
         if train_config.dataset == "synthetic":
@@ -143,13 +142,10 @@ class Trainer:
 
         # load datasets
         train_ds = utils.BigDataset(self.train_ds_path, self.train_ds_size)
-        generator = torch.Generator()
-        generator.manual_seed(seed)
         self.train_dl = DataLoader(
             train_ds,
             batch_size=self.batch_size_train,
             shuffle=self.shuffle,
-            generator=generator,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
         )
@@ -176,7 +172,9 @@ class Trainer:
             )
 
             # iterate over all sample batches in epoch
-            for batch_num, (ori, acc, pose, _) in enumerate(self.train_dl):
+            for batch_num, (ori, acc, pose, file_id) in enumerate(self.train_dl):
+
+                self.logger.debug("\nLoaded files {}:".format("\n".join(file_id)))
 
                 input_vec, target_vec = utils.assemble_input_target(
                     ori, acc, pose, self.sens_ind
