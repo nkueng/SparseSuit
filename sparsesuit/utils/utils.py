@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 import sys
 
 import cv2
@@ -37,11 +38,12 @@ def str2gender(string):
 def configure_logger(name, log_path="logs/", level=logging.INFO):
     logname = os.path.join(log_path, "log.txt")
     os.makedirs(os.path.dirname(logname), exist_ok=True)
-    logging.basicConfig(filename=logname,
-                        format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
-                        datefmt='%d-%m-%Y %H:%M:%S',
-                        level=level
-                        )
+    logging.basicConfig(
+        filename=logname,
+        format="%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
+        datefmt="%d-%m-%Y %H:%M:%S",
+        level=level,
+    )
     logger = logging.getLogger(name)
     # make logger output to console
     logger.addHandler(logging.StreamHandler(sys.stdout))
@@ -110,6 +112,16 @@ def compute_jerk(data, delta: int, fps: int):
             / pow(interval, 3)
         )
     return np.linalg.norm(res, axis=2)
+
+
+def make_deterministic(seed):
+    random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 def rad2deg(v):

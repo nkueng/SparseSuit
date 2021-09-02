@@ -19,10 +19,6 @@ from welford import Welford
 from sparsesuit.constants import sensors, paths
 from sparsesuit.utils import visualization, smpl_helpers, utils
 
-# fix seed for reproducibility
-seed = 14
-np.random.seed(seed)
-
 
 class Normalizer:
     def __init__(self, cfg):
@@ -32,6 +28,9 @@ class Normalizer:
         self.tar = cfg.dataset.tar
         self.visualize = cfg.visualize
         self.debug = cfg.debug
+
+        # reproducibility
+        utils.make_deterministic(14)
 
         # choose dataset folder based on params
         if self.dataset_type == "synthetic":

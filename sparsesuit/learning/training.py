@@ -17,12 +17,6 @@ from sparsesuit.constants import paths
 from sparsesuit.learning.evaluation import Evaluator
 from sparsesuit.utils import utils
 
-# TODO: still differences between training with same params, why?
-seed = 14
-random.seed(seed)
-np.random.seed(seed)
-torch.manual_seed(seed)
-
 
 class Trainer:
     def __init__(self, cfg):
@@ -30,6 +24,9 @@ class Trainer:
 
         # cuda setup
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        # reproducibility
+        utils.make_deterministic(14)
 
         # experiment setup
         train_config = cfg.experiment
@@ -51,7 +48,9 @@ class Trainer:
 
         # logger setup
         log_level = logging.DEBUG if cfg.debug else logging.INFO
-        self.logger = utils.configure_logger(name="training", log_path=self.model_path, level=log_level)
+        self.logger = utils.configure_logger(
+            name="training", log_path=self.model_path, level=log_level
+        )
         print("Training\n*******************\n")
         self.logger.info("Using {} device".format(self.device))
         self.logger.info(OmegaConf.to_yaml(cfg))
@@ -125,7 +124,9 @@ class Trainer:
 
         # init network
         self.model = BiRNN(input_dim=input_dim, target_dim=target_dim).to(self.device)
-        self.logger.info("Trainable parameters: {}".format(count_parameters(self.model)))
+        self.logger.info(
+            "Trainable parameters: {}".format(count_parameters(self.model))
+        )
         # self.logger.info(self.model)
 
         # init loss fct and optimizer
@@ -170,7 +171,9 @@ class Trainer:
 
         # iterate over epochs
         for epoch in range(self.epochs):
-            self.logger.debug("\nEpoch {}\n-------------------------------".format(epoch + 1))
+            self.logger.debug(
+                "\nEpoch {}\n-------------------------------".format(epoch + 1)
+            )
 
             # iterate over all sample batches in epoch
             for batch_num, (ori, acc, pose, _) in enumerate(self.train_dl):
