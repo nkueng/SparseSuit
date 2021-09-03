@@ -18,8 +18,8 @@ def write_config(path, config):
         OmegaConf.save(config=conf, f=f.name)
 
 
-def load_config(path):
-    conf_file = os.path.join(path, "config.yaml")
+def load_config(path, file_name="config.yaml"):
+    conf_file = os.path.join(path, file_name)
     return OmegaConf.load(conf_file)
 
 

@@ -34,27 +34,6 @@ class Trainer:
         train_sens = train_config.sensors
         num_train_sens = train_config.count
 
-        # tensorboard setup
-        time_stamp = datetime.datetime.now().strftime("%y%m%d%H%M%S")
-        self.experiment_name = "-".join(
-            [
-                time_stamp,
-                self.exp_name,
-                # train_config.config + str(num_train_sens),
-            ]
-        )
-        self.model_path = os.path.join(os.getcwd(), "runs/" + self.experiment_name)
-        self.writer = SummaryWriter(self.model_path)
-
-        # logger setup
-        log_level = logging.DEBUG if cfg.debug else logging.INFO
-        self.logger = utils.configure_logger(
-            name="training", log_path=self.model_path, level=log_level
-        )
-        print("Training\n*******************\n")
-        self.logger.info("Using {} device".format(self.device))
-        self.logger.info(OmegaConf.to_yaml(cfg))
-
         # hyper-parameters
         self.hyper_params = cfg.hyperparams
         self.epochs = self.hyper_params.max_epochs
@@ -66,6 +45,41 @@ class Trainer:
         self.shuffle = self.hyper_params.shuffle
         self.num_workers = self.hyper_params.num_workers
         self.pin_memory = self.hyper_params.pin_memory
+
+        # find differences between this experiment and default hyperparams
+        def_path = os.path.join(os.getcwd(), "conf/hyperparams")
+        hyperparams_def = utils.load_config(def_path, "default.yaml")
+        hyperparams_diff = {
+            k: cfg.hyperparams[k]
+            for k, _ in set(hyperparams_def.items()) - set(cfg.hyperparams.items())
+        }
+
+        # tensorboard setup
+        time_stamp = datetime.datetime.now().strftime("%y%m%d%H%M")
+
+        # create folder name from time, experiment, and hyperparameter changes
+        self.experiment_name = "-".join(
+            [
+                time_stamp,
+                self.exp_name,
+                # train_config.config + str(num_train_sens),
+            ]
+        )
+
+        for k, v in hyperparams_diff.items():
+            self.experiment_name += "-" + k + str(v)
+
+        self.model_path = os.path.join(os.getcwd(), "runs/" + self.experiment_name)
+        self.writer = SummaryWriter(self.model_path)
+
+        # logger setup
+        log_level = logging.DEBUG if cfg.debug else logging.INFO
+        self.logger = utils.configure_logger(
+            name="training", log_path=self.model_path, level=log_level
+        )
+        print("Training\n*******************\n")
+        self.logger.info("Using {} device".format(self.device))
+        self.logger.info(OmegaConf.to_yaml(cfg))
 
         # get dataset required by configuration
         ds_folder = paths.AMASS_PATH
