@@ -112,10 +112,38 @@ SENS_NAMES_SSP = list(SENS_VERTS_SSP.keys())
 
 # indices of 15 SMPL joints used as targets for predictions in DIP (excludes pelvis, ankles, feet, wrists, and hands)
 SMPL_DIP_JOINTS = [1, 2, 3, 4, 5, 6, 9, 12, 13, 14, 15, 16, 17, 18, 19]
-# indices of 19 SMPL joints used as targets for predictions in this thesis (excludes pelvis, feet, and hands)
+
+# indices of 19 SMPL joints used as targets for predictions in this project (excludes pelvis, feet, and hands)
 SMPL_SSP_JOINTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
+SMPLX_RIG_JOINTS = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    28,
+    43,
+]
 NUM_SMPL_JOINTS = 24
 NUM_SMPLX_JOINTS = 55
+
 SMPL_PARENTS = [
     -1,
     0,

@@ -56,7 +56,7 @@ class Synthesizer:
         self.joint_ids = [sensors.SENS_JOINTS_IDS[sensor] for sensor in self.sens_names]
 
         # load SMPL model(s)
-        self.smpl_models = smpl_helpers.load_smplx(cfg.dataset.smpl_genders)
+        self.smpl_models = smpl_helpers.load_smplx_genders(cfg.dataset.smpl_genders)
 
         self.asset_counter = 0
 
@@ -236,6 +236,7 @@ class Synthesizer:
             betas_torch = torch.zeros([chunk_size, 10], dtype=dtype)
             # padding pose data for compatibility with number of smplx joints (55) required by lbs
             padding_len = sensors.NUM_SMPLX_JOINTS - sensors.NUM_SMPL_JOINTS
+            # TODO: this wrongly maps hand joints to jaw
             poses_torch = F.pad(torch.from_numpy(poses_k), [0, padding_len * 3])
 
             vertices_k, joints_k, rel_tfs_k = smpl_helpers.my_lbs(

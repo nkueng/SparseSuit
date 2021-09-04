@@ -87,7 +87,7 @@ class Normalizer:
 
         if self.visualize:
             # load neutral smpl model for evaluation of normalized sensor data
-            smpl_model = smpl_helpers.load_smplx(["neutral"])["neutral"]
+            smpl_model = smpl_helpers.load_smplx("neutral")
 
         # set up objects for online mean and variance computation
         stats_ori = Welford()

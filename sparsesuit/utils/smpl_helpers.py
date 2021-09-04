@@ -1,5 +1,6 @@
 import os
 
+import numpy
 import numpy as np
 import smplx
 import torch
@@ -8,25 +9,37 @@ from smplx import lbs
 from sparsesuit.constants import paths, sensors
 
 
-def load_smplx(genders: list = None) -> dict:
+def load_smplx_genders(genders: list = None, model_type: str = "smplx") -> dict:
     models = {}
     for gender in genders:
         models[gender] = smplx.create(
             model_path=os.path.join(paths.DATA_PATH, paths.SMPL_PATH),
-            model_type="smplx",
+            model_type=model_type,
             gender=gender,
-            ext="npz",
         )
     return models
 
 
+def load_smplx(gender: str = None, model_type: str = "smplx"):
+    return smplx.create(
+        model_path=os.path.join(paths.DATA_PATH, paths.SMPL_PATH),
+        model_type=model_type,
+        gender=gender,
+    )
+
+
 def my_lbs(
-    model: smplx.SMPLX, pose: torch.Tensor, betas: torch.Tensor, pose2rot: bool = True
+    model: smplx.SMPLX,
+    pose: torch.Tensor,
+    betas: torch.Tensor = None,
+    pose2rot: bool = True,
 ):
     """Performs Linear Blend Skinning with the given shape and pose parameters
 
     Parameters
     ----------
+    model : smplx.SMPLX
+        The smpl model to assume the poses
     betas : torch.tensor BxNB
         The tensor of shape parameters
     pose : torch.tensor Bx(J + 1) * 3
@@ -61,8 +74,15 @@ def my_lbs(
         The joints of the model
     """
 
-    batch_size = max(betas.shape[0], pose.shape[0])
-    device, dtype = betas.device, betas.dtype
+    batch_size = pose.shape[0]
+    device, dtype = model.shapedirs.device, pose.dtype
+
+    # make sure everything is on same device
+    if pose.device != device:
+        pose = pose.to(device)
+
+    # if no betas are provided, assume repetition of model betas
+    betas = torch.tile(model.betas, [batch_size, 1])
 
     # Add shape contribution
     v_shaped = model.v_template + lbs.blend_shapes(betas, model.shapedirs)
@@ -119,6 +139,40 @@ def my_lbs(
     verts = v_homo[:, :, :3, 0]
 
     return verts, joints_transf, rel_tfs
+
+
+def extract_from_smplh(poses, target_joints):
+    """
+    Given a sequence of SMPL-H poses from AMASS, this function extracts the information of the target_joints and
+    returns a padded version ready for lbs.
+    :param poses:
+    :param target_joints:
+    :return:
+    """
+    targ_joints = target_joints.copy()
+    num_frames = len(poses)
+
+    # extract the target_joints orientations
+    smpl_joint_ori = np.reshape(poses, [num_frames, -1, 3])[
+        :, : sensors.NUM_SMPL_JOINTS
+    ]
+
+    # copy orientations into SMPLX pose vector
+    smplx_joint_ori = np.zeros([num_frames, sensors.NUM_SMPLX_JOINTS, 3])
+
+    # check if hands are targets and remove, as those joints do not exist in SMPLX
+    smpl_left_hand_ind = sensors.SMPL_JOINT_IDS["left_hand"]
+    smpl_righ_hand_ind = sensors.SMPL_JOINT_IDS["right_hand"]
+
+    if smpl_left_hand_ind in targ_joints:
+        targ_joints.remove(smpl_left_hand_ind)
+    if smpl_righ_hand_ind in targ_joints:
+        targ_joints.remove(smpl_righ_hand_ind)
+
+    # handle the other body joints
+    smplx_joint_ori[:, targ_joints] = smpl_joint_ori[:, targ_joints]
+
+    return torch.Tensor(np.reshape(smplx_joint_ori, [num_frames, -1]))
 
 
 def smpl_reduced_to_full(smpl_reduced, target_joints):
