@@ -7,7 +7,7 @@ ON_MAC = platform.system() == "Darwin"
 MAC_DATA_PATH = "/Volumes/SSD500/IMU_data/"
 
 # linux dir
-LINUX_DATA_PATH = "/media/nic/Extreme SSD/IMU_data/"
+LINUX_DATA_PATH = "/media/nic/ExtremeSSD/IMU_data/"
 CLUSTER_DATA_PATH = "/home/mjd957/IMU_data/"
 
 # root data path depending on platform; all paths should start here
