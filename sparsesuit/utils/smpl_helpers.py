@@ -74,6 +74,9 @@ def my_lbs(
     if pose.device != device:
         pose = pose.to(device)
 
+    # make hands look relaxed
+    pose += model.pose_mean
+
     # if no betas are provided, assume repetition of model betas
     betas = torch.tile(model.betas, [batch_size, 1]) if betas is None else betas
 
