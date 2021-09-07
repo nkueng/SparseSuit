@@ -194,12 +194,12 @@ class Synthesizer:
         return True
 
     # Get orientation and acceleration from list of 4x4 matrices and vertices
-    def get_ori_accel(self, A, vertices_IMU):
+    def get_ori_accel(self, rel_tfs, vertices_IMU):
         # extract IMU orientations from transformation matrices (in global frame)
         # TODO: make orientations noisy
         oris = []
         for idx in self.joint_ids:
-            oris.append(np.expand_dims(A[:, idx, :3, :3], axis=1))
+            oris.append(np.expand_dims(rel_tfs[:, idx, :3, :3], axis=1))
         orientation = np.concatenate(oris, axis=1)
 
         # IMU sim for noise
@@ -213,7 +213,7 @@ class Synthesizer:
         acceleration = []
 
         time_interval = self.acc_delta / self.fps
-        total_number_frames = len(A)
+        total_number_frames = len(rel_tfs)
         for idx in range(self.acc_delta, total_number_frames - self.acc_delta):
             vertex_0 = vertices_IMU[idx - self.acc_delta].astype(float)  # 6*3
             vertex_1 = vertices_IMU[idx].astype(float)
