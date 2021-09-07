@@ -130,6 +130,7 @@ class Normalizer:
 
                 # extract relevant data
                 try:
+                    # AMASS
                     # IMU orientation matrices of sensors
                     oris = data_in["imu_ori"]
                     # IMU acceleration vectors of sensors
@@ -140,11 +141,12 @@ class Normalizer:
                     pose2rot = True
                 except KeyError:
                     try:
+                        # DIP-IMU
                         # IMU orientation matrices of sensors
                         oris = np.array(data_in["ori"])
                         # IMU acceleration vectors of sensors
                         accs = np.array(data_in["acc"])
-                        # flattened pose vector of 15 SMPL joints in axis-angle format
+                        # flattened pose vector of 15 SMPL joints in rot-matrix format
                         poses = np.array(data_in["poses"])
                         pose2rot = False
                     except KeyError:
@@ -223,19 +225,25 @@ class Normalizer:
 
                 # convert poses to rotation matrix format if necessary
                 poses_vec = poses[nan_mask]
-                # TODO: what about pred_trgt_joints if pose2rot is False
                 if pose2rot:
                     # select target joints
                     poses_vec_sel = np.reshape(poses_vec, (new_seq_length, -1, 3))[
                         :, self.pred_trgt_joints
                     ]
+                    # convert pose data from angle-axis vectors to rotation matrices
                     poses_vec_torch = torch.from_numpy(
                         np.reshape(poses_vec_sel, (-1, 3))
                     )
                     poses_vec_rot = (
                         lbs.batch_rodrigues(poses_vec_torch).detach().numpy()
                     )
-                    poses_vec = np.reshape(poses_vec_rot, (new_seq_length, -1))
+                    poses_vec_sel = np.reshape(poses_vec_rot, (new_seq_length, -1))
+                else:
+                    # poses given in rot matrix format already, only select relevant
+                    poses_vec_sel = np.reshape(poses_vec, [new_seq_length, -1, 3, 3])[
+                        :, self.pred_trgt_joints
+                    ]
+                    poses_vec_sel = np.reshape(poses_vec_sel, [new_seq_length, -1])
 
                 # save normalized orientations, accelerations and poses locally
                 Path(norm_dir_name).mkdir(parents=True, exist_ok=True)
@@ -244,7 +252,7 @@ class Normalizer:
                 data_out = {
                     "orientation": oris_vec,
                     "acceleration": accs_vec,
-                    "pose": poses_vec,
+                    "pose": poses_vec_sel,
                 }
                 with open(out_filename + ".npz", "wb") as fout:
                     np.savez_compressed(fout, **data_out)
@@ -253,23 +261,25 @@ class Normalizer:
                 for idx in range(new_seq_length):
                     stats_ori.add(oris_vec[idx])
                     stats_acc.add(accs_vec[idx])
-                    stats_pose.add(poses_vec[idx])
+                    stats_pose.add(poses_vec_sel[idx])
 
                 print("Normalized {}/{}".format(subject_i, motion_type_i))
 
                 if self.visualize:
                     frames = 300
-                    vis_poses = np.zeros([frames, sensors.NUM_SMPLX_JOINTS, 3])
-                    vis_poses[:, self.pred_trgt_joints] = poses_vec_sel[:frames]
+                    vis_poses = np.tile(
+                        np.eye(3), [frames, sensors.NUM_SMPLX_JOINTS, 1, 1]
+                    )
+                    vis_poses[:, self.pred_trgt_joints] = np.reshape(
+                        poses_vec_sel[:frames], [frames, -1, 3, 3]
+                    )
                     # vis_poses[:, 0] = np.array([[1.20919958, 1.20919958, 1.20919958]])
                     poses_torch = torch.from_numpy(vis_poses).float()
                     # compute skin vertices from SMPL pose
-                    betas_torch = torch.zeros([frames, 10], dtype=torch.float32)
                     verts, joints, _ = smpl_helpers.my_lbs(
                         model=smpl_model,
                         pose=poses_torch,
-                        betas=betas_torch,
-                        pose2rot=True,
+                        pose2rot=False,
                     )
 
                     verts_np, joints_np = (
@@ -292,7 +302,7 @@ class Normalizer:
                     orientations = [np.squeeze(oris_norm_wo_root[:frames])]
                     accelerations = [np.squeeze(accs_norm_wo_root[:frames])]
                     visualization.vis_smpl(
-                        model=smpl_model,
+                        faces=smpl_model.faces,
                         vertices=vertices,
                         sensors=vis_sensors,
                         accs=accelerations,

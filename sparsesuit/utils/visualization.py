@@ -5,7 +5,7 @@ import numpy as np
 
 
 def vis_smpl(
-    model,
+    faces,
     vertices: list,
     vertex_colors: list = None,
     play_frames: int = 100,
@@ -55,9 +55,7 @@ def vis_smpl(
                 if vertex_colors is not None
                 else [0.3, 0.3, 0.3, 0.8]
             )
-            tri_mesh = trimesh.Trimesh(
-                vertex[i], model.faces, vertex_colors=vertex_color
-            )
+            tri_mesh = trimesh.Trimesh(vertex[i], faces, vertex_colors=vertex_color)
             mesh = pyrender.Mesh.from_trimesh(tri_mesh)
             nodes.append(pyrender.Node(mesh=mesh, translation=transl[v]))
 
@@ -83,7 +81,7 @@ def vis_smpl(
                         origin_size=0.005, axis_radius=0.003, axis_length=0.03
                     )
                 else:
-                    sens = trimesh.creation.uv_sphere(radius=0.01)
+                    sens = trimesh.creation.uv_sphere(radius=0.015)
                 sens.visual.vertex_colors = [0, 0, 0, 1.0]
                 tfs = np.tile(np.eye(4), (sensor.shape[1], 1, 1))
                 if oris is not None:

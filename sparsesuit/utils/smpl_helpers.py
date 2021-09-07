@@ -1,6 +1,4 @@
 import os
-
-import numpy
 import numpy as np
 import smplx
 import torch
@@ -9,23 +7,31 @@ from smplx import lbs
 from sparsesuit.constants import paths, sensors
 
 
-def load_smplx_genders(genders: list = None, model_type: str = "smplx") -> dict:
+def load_smplx_genders(
+    genders: list = None,
+    model_type: str = "smplx",
+    device=torch.device("cpu"),
+) -> dict:
     models = {}
     for gender in genders:
         models[gender] = smplx.create(
             model_path=os.path.join(paths.DATA_PATH, paths.SMPL_PATH),
             model_type=model_type,
             gender=gender,
-        )
+        ).to(device)
     return models
 
 
-def load_smplx(gender: str = None, model_type: str = "smplx"):
+def load_smplx(
+    gender: str = "neutral",
+    model_type: str = "smplx",
+    device=torch.device("cpu"),
+):
     return smplx.create(
         model_path=os.path.join(paths.DATA_PATH, paths.SMPL_PATH),
         model_type=model_type,
         gender=gender,
-    )
+    ).to(device)
 
 
 def my_lbs(
@@ -43,27 +49,12 @@ def my_lbs(
     betas : torch.tensor BxNB
         The tensor of shape parameters
     pose : torch.tensor Bx(J + 1) * 3
-        The pose parameters in axis-angle format
-    v_template torch.tensor BxVx3
-        The template mesh that will be deformed
-    shapedirs : torch.tensor 1xNB
-        The tensor of PCA shape displacements
-    posedirs : torch.tensor Px(V * 3)
-        The pose PCA coefficients
-    J_regressor : torch.tensor JxV
-        The regressor array that is used to calculate the joints from
-        the position of the vertices
-    parents: torch.tensor J
-        The array that describes the kinematic tree for the model
-    lbs_weights: torch.tensor N x V x (J + 1)
-        The linear blend skinning weights that represent how much the
-        rotation matrix of each part affects each vertex
+        The pose parameters in axis-angle format (pose2rot -> True) or rotation matrices
     pose2rot: bool, optional
         Flag on whether to convert the input pose tensor to rotation
         matrices. The default value is True. If False, then the pose tensor
         should already contain rotation matrices and have a size of
-        Bx(J + 1)x9
-    dtype: torch.dtype, optional
+        Bx(J + 1)x9 (or x3x3)
 
     Returns
     -------
@@ -72,17 +63,19 @@ def my_lbs(
         displacements.
     joints: torch.tensor BxJx3
         The joints of the model
+    rel_tfs:
+        The relative transforms between all joints and the root
     """
 
     batch_size = pose.shape[0]
     device, dtype = model.shapedirs.device, pose.dtype
 
-    # make sure everything is on same device
+    # make sure everything is on same device (smpl model determines device)
     if pose.device != device:
         pose = pose.to(device)
 
     # if no betas are provided, assume repetition of model betas
-    betas = torch.tile(model.betas, [batch_size, 1])
+    betas = torch.tile(model.betas, [batch_size, 1]) if betas is None else betas
 
     # Add shape contribution
     v_shaped = model.v_template + lbs.blend_shapes(betas, model.shapedirs)
@@ -141,10 +134,10 @@ def my_lbs(
     return verts, joints_transf, rel_tfs
 
 
-def extract_from_smplh(poses, target_joints):
+def extract_from_smplh(poses, target_joints, model_type="smplx"):
     """
     Given a sequence of SMPL-H poses from AMASS, this function extracts the information of the target_joints and
-    returns a padded version ready for lbs.
+    returns padded SMPL-X poses ready for lbs.
     :param poses:
     :param target_joints:
     :return:
@@ -152,18 +145,18 @@ def extract_from_smplh(poses, target_joints):
     targ_joints = target_joints.copy()
     num_frames = len(poses)
 
-    # extract the target_joints orientations
+    # extract the orientations of the 24 SMPL body joints
     smpl_joint_ori = np.reshape(poses, [num_frames, -1, 3])[
         :, : sensors.NUM_SMPL_JOINTS
     ]
 
+    # TODO: adapt for different model_types: SMPL, SMPL-H, SMPL-X
     # copy orientations into SMPLX pose vector
     smplx_joint_ori = np.zeros([num_frames, sensors.NUM_SMPLX_JOINTS, 3])
 
     # check if hands are targets and remove, as those joints do not exist in SMPLX
     smpl_left_hand_ind = sensors.SMPL_JOINT_IDS["left_hand"]
     smpl_righ_hand_ind = sensors.SMPL_JOINT_IDS["right_hand"]
-
     if smpl_left_hand_ind in targ_joints:
         targ_joints.remove(smpl_left_hand_ind)
     if smpl_righ_hand_ind in targ_joints:

@@ -23,7 +23,7 @@ class Trainer:
         self.cfg = cfg
 
         # cuda setup
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # reproducibility
         utils.make_deterministic(14)

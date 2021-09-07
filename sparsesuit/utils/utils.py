@@ -148,3 +148,9 @@ class BigDataset(Dataset):
             return data_in["ori"], data_in["acc"], data_in["pose"], filename
         else:
             raise IndexError("Index not in dataset. Abort!")
+
+
+def copy2cpu(tensor):
+    if isinstance(tensor, np.ndarray):
+        return tensor
+    return tensor.detach().cpu().numpy()

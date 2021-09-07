@@ -66,16 +66,21 @@ class Evaluator:
         self.train_config = utils.load_config(self.exp_path)
 
         # cuda setup
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # logger setup
         log_level = logging.DEBUG if cfg.debug else logging.INFO
-        self.logger = utils.configure_logger(name="evaluation", log_path=self.exp_path, level=log_level)
+        self.logger = utils.configure_logger(
+            name="evaluation", log_path=self.exp_path, level=log_level
+        )
         print("Evaluation\n*******************\n")
         self.logger.info("Using {} device".format(self.device))
 
         # load neutral smpl model for joint position evaluation
-        self.smpl_model = smpl_helpers.load_smplx(["neutral"])["neutral"]
+        self.smpl_model = smpl_helpers.load_smplx(
+            "neutral",
+            # device=self.device,
+        )
 
         # setup model
         self.pred_trgt_joints = self.train_config.dataset.pred_trgt_joints
@@ -363,9 +368,8 @@ class Evaluator:
         return angle_err, pos_err, jerk
 
     def joint_pos_error(self, predicted_pose_params, target_pose_params):
-        # compute 3d joint positions for prediction and target
+        """compute 3d joint positions for prediction and target, then evaluate euclidean distance"""
         batch_size = predicted_pose_params.shape[0]
-        betas_torch = torch.zeros([batch_size, 10], dtype=torch.float32)
 
         pose_dim = 9  # 9 if rotation matrices, 3 if angle axis
         assert (
@@ -394,20 +398,20 @@ class Evaluator:
 
         pred_poses_torch = torch.from_numpy(pred_poses_proper).float()
         pred_verts, pred_joints, _ = smpl_helpers.my_lbs(
-            self.smpl_model, pred_poses_torch, betas_torch, pose2rot=False
+            self.smpl_model, pred_poses_torch, pose2rot=False
         )
         pred_verts_np, pred_joints_np = (
-            pred_verts.detach().numpy(),
-            pred_joints.detach().numpy(),
+            utils.copy2cpu(pred_verts),
+            utils.copy2cpu(pred_joints),
         )
 
         targ_poses_torch = torch.from_numpy(targ_poses).float()
         targ_verts, targ_joints, _ = smpl_helpers.my_lbs(
-            self.smpl_model, targ_poses_torch, betas_torch, pose2rot=False
+            self.smpl_model, targ_poses_torch, pose2rot=False
         )
         targ_verts_np, targ_joints_np = (
-            targ_verts.detach().numpy(),
-            targ_joints.detach().numpy(),
+            utils.copy2cpu(targ_verts),
+            utils.copy2cpu(targ_joints),
         )
 
         # select SMPL joints (first 24) from SMPL-X joints
@@ -415,7 +419,7 @@ class Evaluator:
         targ_joints_sel = targ_joints_np[:, : sensors.NUM_SMPL_JOINTS]
 
         # compute jerk for all SMPL joints
-        jerk_delta = 4
+        jerk_delta = 1
         jerk = utils.compute_jerk(pred_joints_sel, jerk_delta, self.ds_fps)
 
         # rotationally align joints via Procrustes
@@ -451,15 +455,15 @@ class Evaluator:
             ]
 
             visualization.vis_smpl(
-                self.smpl_model,
-                verts,
+                faces=self.smpl_model.faces,
+                vertices=verts,
                 vertex_colors=vertex_colors,
                 # joints=joints,
                 sensors=sensors_vis,
                 play_frames=300,
                 playback_speed=0.3,
                 add_captions=True,
-                side_by_side=True,
+                side_by_side=False,
             )
 
         return mm * 100, jerk  # convert m to cm
