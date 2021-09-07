@@ -1,13 +1,13 @@
 """ A script to handle the synthesis of IMU data from 17 sensors based on the AMASS dataset of SMPL pose data. """
 import os
 import pickle as pkl
+import time
 from pathlib import Path
 
 import hydra
 import numpy as np
 import pymusim
 import torch
-import torch.nn.functional as F
 from omegaconf import DictConfig
 
 from normalization import Normalizer
@@ -26,8 +26,8 @@ class Synthesizer:
 
         # run parameters
         self.visualize = cfg.visualize
-        self.skip_existing = cfg.skip_existing
         self.debug = cfg.debug
+        self.skip_existing = False if cfg.debug else cfg.skip_existing
 
         # set internal params depending on config params
         self.src_dir = os.path.join(paths.DATA_PATH, paths.AMASS_PATH)
@@ -52,15 +52,26 @@ class Synthesizer:
         if self.add_noise:
             target_name += "_noisy"
 
+        print("Source data: {}".format(self.src_dir))
+
         self.trgt_dir = os.path.join(paths.DATA_PATH, target_name)
         self.joint_ids = [sensors.SENS_JOINTS_IDS[sensor] for sensor in self.sens_names]
 
-        # load SMPL model(s)
-        self.smpl_models = smpl_helpers.load_smplx_genders(cfg.dataset.smpl_genders)
+        # use gpu if desired and cuda is available
+        self.device = torch.device(
+            "cuda" if torch.cuda.is_available() and cfg.gpu else "cpu"
+        )
+        print("Using {} device".format(self.device))
+
+        # load SMPL model(s) on CPU (move to GPU later)
+        self.smpl_models = smpl_helpers.load_smplx_genders(
+            cfg.dataset.smpl_genders,
+        )
 
         self.asset_counter = 0
 
     def synthesize_dataset(self):
+        t0 = time.perf_counter()
         for subdir, dirs, files in os.walk(self.src_dir):
             for file in files:
                 if file.startswith("."):
@@ -95,6 +106,7 @@ class Synthesizer:
                     self.asset_counter += 1
 
         self.write_config()
+        print("Total synthesis runtime: {}s".format(time.perf_counter() - t0))
 
     def write_config(self):
         # save configuration file for synthetic dataset
@@ -216,36 +228,30 @@ class Synthesizer:
         return orientation[self.acc_delta : -self.acc_delta], np.asarray(acceleration)
 
     def compute_imu_data(self, gender, poses):
-        # use cuda if available
-        # device = "cuda" if torch.cuda.is_available() else "cpu"
-        # print("Using {} device".format(device))
-        dtype = torch.float32
 
         # extract poses of all joints (used for orientation of IMUs/body segments)
-        # TODO: change dtype to float64 if necessary for precision
         batch_size = len(poses)
-        max_chunk_size = 3000
+        max_chunk_size = 1000 if self.device == torch.device("cuda") else 3000
         num_chunks = batch_size // max_chunk_size + 1
         vertices, joints, rel_tfs = [], [], []
         for k in range(num_chunks):
-            poses_k = poses[
-                k * max_chunk_size : (k + 1) * max_chunk_size,
-                : sensors.NUM_SMPL_JOINTS * 3,
-            ]
-            chunk_size = len(poses_k)
-            betas_torch = torch.zeros([chunk_size, 10], dtype=dtype)
-            # padding pose data for compatibility with number of smplx joints (55) required by lbs
-            padding_len = sensors.NUM_SMPLX_JOINTS - sensors.NUM_SMPL_JOINTS
-            # TODO: this wrongly maps hand joints to jaw
-            poses_torch = F.pad(torch.from_numpy(poses_k), [0, padding_len * 3])
+            # extract chunk of poses
+            poses_k = poses[k * max_chunk_size : (k + 1) * max_chunk_size]
 
-            vertices_k, joints_k, rel_tfs_k = smpl_helpers.my_lbs(
-                self.smpl_models[gender], poses_torch.float(), betas_torch
+            # padding pose data for compatibility with number of smplx joints (55) required by lbs
+            poses_torch = smpl_helpers.extract_from_smplh(
+                poses_k, list(sensors.SMPL_JOINT_IDS.values())
             )
 
-            vertices.append(vertices_k.detach().numpy())
-            joints.append(joints_k.detach().numpy())
-            rel_tfs.append(rel_tfs_k.detach().numpy())
+            # load relevant smpl model onto GPU if desired
+            smpl_model = self.smpl_models[gender].to(self.device)
+            vertices_k, joints_k, rel_tfs_k = smpl_helpers.my_lbs(
+                smpl_model, poses_torch
+            )
+
+            vertices.append(utils.copy2cpu(vertices_k))
+            joints.append(utils.copy2cpu(joints_k))
+            rel_tfs.append(utils.copy2cpu(rel_tfs_k))
 
         vertices = np.concatenate(vertices, axis=0)
         joints = np.concatenate(joints, axis=0)
@@ -266,7 +272,7 @@ class Synthesizer:
             ]
             vis_sensors = [imu_vertices[self.acc_delta : -self.acc_delta]]
             visualization.vis_smpl(
-                model=self.smpl_models[gender],
+                faces=self.smpl_models[gender].faces,
                 # vertices=[np.expand_dims(model.v_template.detach().numpy(), axis=0)],  # vis ori of smpl's v_template
                 vertices=vis_verts,
                 joints=vis_joints,

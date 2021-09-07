@@ -8,8 +8,9 @@ dataset:
   smpl_genders: [male, female]
   tar: False
 visualize: False
-debug: True
+debug: False
 skip_existing: True
+gpu: True
 
 hydra:
   run:
