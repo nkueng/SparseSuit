@@ -55,7 +55,8 @@ def aa_to_rot_matrix(data):
     Converts the orientation data to represent angle axis as rotation matrices. `data` is expected in format
     (seq_length, n*3). Returns an array of shape (seq_length, n*9).
     """
-    # TODO: use batch_rodrigues from smplx
+    if len(data.shape) == 1:
+        data = np.expand_dims(data, axis=0)
     # reshape to have sensor values explicit
     data_c = np.array(data, copy=True)
     seq_length, n = data_c.shape[0], data_c.shape[1] // 3
@@ -131,6 +132,13 @@ def rad2deg(v):
     return v * 180.0 / np.pi
 
 
+def remove_scaling(rotations):
+    """Removing scaling from 3x3 matrices by decomposition into singular values followed by composition with ones as
+    singular values."""
+    u, _, v = np.linalg.svd(rotations)
+    return u @ v
+
+
 class BigDataset(Dataset):
     def __init__(self, path, length):
         self.path = path
@@ -154,3 +162,7 @@ def copy2cpu(tensor):
     if isinstance(tensor, np.ndarray):
         return tensor
     return tensor.detach().cpu().numpy()
+
+
+def get_project_folder():
+    return os.path.join(os.getcwd().split("sparsesuit")[0], "sparsesuit")

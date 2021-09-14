@@ -94,7 +94,6 @@ def vis_smpl(
         if accs is not None:
             for a, acc in enumerate(accs):
                 cyls = []
-                tfs = []
                 for m, meas in enumerate(acc[i]):
                     cyl_orig = sensors[a][i, m]
                     cyl_end = cyl_orig + meas / 100

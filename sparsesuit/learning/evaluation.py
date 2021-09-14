@@ -161,9 +161,14 @@ class Evaluator:
         stats_loss = Welford()
         stats_jerk = Welford()
 
+        # container to store predicted poses
+        predicted_poses = {}
+
         # iterate over test dataset
         with torch.no_grad():
-            for batch_num, (ori, acc, pose_trgt_norm, _) in enumerate(self.test_dl):
+            for batch_num, (ori, acc, pose_trgt_norm, filename) in enumerate(
+                self.test_dl
+            ):
                 self.logger.info(
                     "computing metrics on asset {} with {} frames".format(
                         batch_num, ori.shape[1]
@@ -189,17 +194,16 @@ class Evaluator:
                 loss = F.gaussian_nll_loss(
                     pred_mean, y, pred_std, full=True, reduction="sum"
                 ) / (y.shape[0] * y.shape[1])
-                stats_loss.add(loss.cpu().detach().numpy())
+                stats_loss.add(utils.copy2cpu(loss))
 
                 self.logger.debug("Loss: {:.2f}".format(loss))
 
                 # extract poses from predictions
-                pose_pred_norm = pred_mean[:, :, : self.pose_dim].cpu().detach().numpy()
+                pose_pred_norm = utils.copy2cpu(pred_mean[:, :, : self.pose_dim])
                 # undo normalization of SMPL predictions and targets
                 pose_pred = pose_pred_norm * self.pose_std + self.pose_mean
                 pose_trgt = (
-                    pose_trgt_norm.cpu().detach().numpy() * self.pose_std
-                    + self.pose_mean
+                    utils.copy2cpu(pose_trgt_norm) * self.pose_std + self.pose_mean
                 )
 
                 # expand reduced (15/19 joints) to full 24 smpl joints
@@ -211,6 +215,9 @@ class Evaluator:
                     smpl_helpers.smpl_reduced_to_full(p, self.pred_trgt_joints)
                     for p in pose_trgt
                 ]
+
+                # keep track of predicted poses
+                predicted_poses[filename[0]] = pose_pred
 
                 # rotate root for upright human-beings
                 pose_pred_full[0][:, :9] = [0, 0, 1, 1, 0, 0, 0, 1, 0]
@@ -235,6 +242,11 @@ class Evaluator:
 
                     for jerk_i in jerk:
                         stats_jerk.add(jerk_i)
+
+        # save predicted poses with model
+        poses_filename = os.path.join(self.exp_path, "predictions.npz")
+        with open(poses_filename, "wb") as fout:
+            np.savez_compressed(fout, **predicted_poses)
 
         # summarize errors
         metrics = {
@@ -358,9 +370,12 @@ class Evaluator:
         angle_err = joint_angle_error(pred_g, targ_g)
 
         # compute positional error for all SMPL joints (optional as computationally heavy)
-        # TODO: get jerk and visualization out of joint_pos_error
+        # TODO: get visualization out of joint_pos_error
         if compute_positional_error:
-            pos_err, jerk = self.joint_pos_error(pred, targ)
+            pos_err, pred_joint_pos = self.joint_pos_error(pred, targ)
+            # compute jerk for all SMPL joints
+            jerk_delta = 1
+            jerk = utils.compute_jerk(pred_joint_pos, jerk_delta, self.ds_fps)
         else:
             pos_err = np.zeros(angle_err.shape)
             jerk = np.zeros(angle_err.shape)
@@ -390,11 +405,7 @@ class Evaluator:
         targ_poses = np.reshape(targ_poses_padded, [batch_size, -1, 3, 3])
 
         # make predictions proper rotation matrices (removing scale information)
-        u, _, v = np.linalg.svd(pred_poses)
-        pred_poses_proper = u @ v
-
-        # pred_poses_aa = rot_matrix_to_aa(np.reshape(pred_poses, [-1, 9]))
-        # pred_poses_proper = np.reshape(pred_poses_aa, [batch_size, -1, 3])  # pose2rot=True
+        pred_poses_proper = utils.remove_scaling(pred_poses)
 
         pred_poses_torch = torch.from_numpy(pred_poses_proper).float()
         pred_verts, pred_joints, _ = smpl_helpers.my_lbs(
@@ -417,10 +428,6 @@ class Evaluator:
         # select SMPL joints (first 24) from SMPL-X joints
         pred_joints_sel = pred_joints_np[:, : sensors.NUM_SMPL_JOINTS]
         targ_joints_sel = targ_joints_np[:, : sensors.NUM_SMPL_JOINTS]
-
-        # compute jerk for all SMPL joints
-        jerk_delta = 1
-        jerk = utils.compute_jerk(pred_joints_sel, jerk_delta, self.ds_fps)
 
         # rotationally align joints via Procrustes
         pred_verts_aligned = []
@@ -466,7 +473,7 @@ class Evaluator:
                 side_by_side=False,
             )
 
-        return mm * 100, jerk  # convert m to cm
+        return mm * 100, pred_joints_sel  # convert m to cm
 
 
 @hydra.main(config_path="conf", config_name="evaluation")

@@ -5,6 +5,7 @@ import torch
 from smplx import lbs
 
 from sparsesuit.constants import paths, sensors
+from sparsesuit.utils import utils
 
 
 def load_smplx_genders(
@@ -74,9 +75,6 @@ def my_lbs(
     if pose.device != device:
         pose = pose.to(device)
 
-    # make hands look relaxed
-    pose += model.pose_mean
-
     # if no betas are provided, assume repetition of model betas
     betas = torch.tile(model.betas, [batch_size, 1]) if betas is None else betas
 
@@ -96,6 +94,9 @@ def my_lbs(
     # N x J x 3 x 3
     ident = torch.eye(3, dtype=dtype, device=device)
     if pose2rot:
+        # make hands look relaxed
+        pose += model.pose_mean
+
         rot_mats = lbs.batch_rodrigues(pose.view(-1, 3)).view([batch_size, -1, 3, 3])
 
         pose_feature = (rot_mats[:, 1:, :, :] - ident).view([batch_size, -1])
@@ -104,6 +105,10 @@ def my_lbs(
             batch_size, -1, 3
         )
     else:
+        # TODO: make hands look relaxed
+        # pose_mean_rot = utils.aa_to_rot_matrix(utils.copy2cpu(model.pose_mean))
+        # pose += torch.Tensor(pose_mean_rot).to(device)
+
         pose_feature = pose[:, 1:].view(batch_size, -1, 3, 3) - ident
         rot_mats = pose.view(batch_size, -1, 3, 3)
 
@@ -135,6 +140,19 @@ def my_lbs(
     verts = v_homo[:, :, :3, 0]
 
     return verts, joints_transf, rel_tfs
+
+
+def extract_from_norm_ds(poses):
+    num_frames = len(poses)
+
+    # transform rot mat to aa
+    smpl_joint_ori = np.reshape(utils.rot_matrix_to_aa(poses), [num_frames, -1, 3])
+
+    # copy orientations into SMPLX pose vector
+    smplx_joint_ori = np.zeros([num_frames, sensors.NUM_SMPLX_JOINTS, 3])
+    smplx_joint_ori[:, sensors.SMPL_SSP_JOINTS] = smpl_joint_ori
+
+    return torch.Tensor(np.reshape(smplx_joint_ori, [num_frames, -1]))
 
 
 def extract_from_smplh(poses, target_joints, model_type="smplx"):
