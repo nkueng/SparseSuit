@@ -1,0 +1,11 @@
+defaults:
+  - default
+
+name: all_test_sequences
+source: AMASS_SSP_nn
+body_transparency: 0
+render_every_n_frame: 10
+show_rendering: False
+orthographic_camera: True
+camera_translation: [0, 0.5, 1.75]
+

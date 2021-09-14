@@ -1,0 +1,16 @@
+defaults:
+  - default
+
+name: synthesis
+source: AMASS
+asset_idx: 3
+frame_idx: -1
+body_transparency: 0.2
+show_sensor_orientations: True
+show_accelerations: True
+use_default_pose: False
+render_every_n_frame: 4
+show_rendering: False
+orthographic_camera: True
+camera_translation: [0, 0.5, 1.75]
+

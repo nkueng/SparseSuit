@@ -1,0 +1,29 @@
+defaults:
+  - default
+
+name: sensor_reduction
+source: AMASS_SSP_nn
+models:
+  - 2108230722-baseline-SSP19
+  - 2108251334-15_sym_out
+  - 2108251900-11_a
+  - 2108251857-minimal_inner
+assets:
+# [asset_idx, frame_idx]
+  - [1, 200]  # throwing
+  - [5, 100]  # side steps
+  - [7, 1080]  # bending arms
+  - [8, 100]  # sitting
+  - [15, 1130]  # dancing
+  - [20, 100]  # simple walking
+  - [27, 2920]  # walking and rotating arms
+body_transparency: 0.0
+show_from_behind: False
+show_sensors: True
+render_frames: 10
+render_every_n_frame: 10
+show_rendering: False
+orthographic_camera: True
+camera_translation: [0, 0.5, 1.75]
+
+

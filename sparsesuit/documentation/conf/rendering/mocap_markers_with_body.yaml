@@ -1,0 +1,11 @@
+defaults:
+  - default
+
+name: mocap_markers_with_body
+frame_idx: 4050
+show_joints: False
+show_skeleton: False
+show_markers: True
+show_rendering: False
+camera_translation: [0, 0.0, 1.5]
+camera_angle: 0.0

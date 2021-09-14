@@ -1,0 +1,24 @@
+name: default
+render_width: 1000
+render_height: 1000
+camera_translation: [0, 0.65, 2]
+camera_angle: 15
+orthographic_camera: False
+smooth: False
+source: AMASS
+asset_idx: 2
+frame_idx: -1
+show_rendering: True
+show_from_behind: False
+show_body: True
+body_transparency: 0.0   # [0,1.0]
+show_joints: False
+show_skeleton: False
+show_sensors: True
+show_sensor_orientations: False
+show_accelerations: False
+show_markers: False
+use_default_pose: True
+render_every_n_frame: 30
+sensors: all
+

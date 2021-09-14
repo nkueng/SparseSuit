@@ -1,0 +1,13 @@
+defaults:
+  - default
+
+name: sensors_on_arm
+show_joints: True
+show_skeleton: True
+show_rendering: True
+show_sensor_orientations: True
+body_transparency: 0.5
+sensors:
+  - right_wrist
+  - right_elbow
+  - right_shoulder
