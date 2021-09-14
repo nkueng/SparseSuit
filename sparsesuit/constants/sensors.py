@@ -170,7 +170,7 @@ SMPL_PARENTS = [
     20,
     21,
 ]
-# the 4 sensors/joints not used as input for SIP (providing accurate groundtruth)
+# the 4 sensors/joints not used as input for SIP: hips and shoulders (providing accurate groundtruth)
 ANG_EVAL_JOINTS = [
     1,
     2,
