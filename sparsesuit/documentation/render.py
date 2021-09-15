@@ -1,4 +1,5 @@
 import os
+import random
 
 import hydra
 import numpy as np
@@ -29,6 +30,9 @@ def render_from_config(cfg: DictConfig):
     # decide on pose
     if cfg.use_default_pose:
         poses_padded = torch.zeros([1, sensors.NUM_SMPLX_JOINTS * 3])
+
+    elif cfg.name == "leg_raise":
+        poses_padded = create_leg_raise_sequence()
     else:
         # load pose data from one of the datasets
         if cfg.source == "AMASS":
@@ -101,10 +105,11 @@ def render_from_config(cfg: DictConfig):
                     )
                     poses_i = pred_i[asset_idx][0][frame_idx:last_frame]
                     poses_padded_i = smpl_helpers.extract_from_norm_ds(poses_i)
+                    poses_gt = poses_padded[asset_idx][frame_idx:last_frame]
                     cfg_i = cfg.copy()
                     cfg_i.name = cfg.name + "/" + str(model) + "/" + str(asset_idx)
                     cfg_i.sensors = sens[model]
-                    render_poses(poses_padded_i, smpl_model, cfg_i)
+                    render_poses(poses_padded_i, smpl_model, cfg_i, poses_gt=poses_gt)
 
             # render selected frames for groundtruth
             for asset_idx, frame_idx in cfg.assets:
@@ -127,7 +132,7 @@ def render_from_config(cfg: DictConfig):
         render_poses(poses_padded, smpl_model, cfg)
 
 
-def render_poses(poses_padded, smpl_model, cfg):
+def render_poses(poses_padded, smpl_model, cfg, poses_gt=None):
     # load mesh viewer
     mv = MeshViewer(
         cfg.render_width,
@@ -142,16 +147,22 @@ def render_poses(poses_padded, smpl_model, cfg):
     # rotate poses to show from behind
     if cfg.show_from_behind:
         poses_padded[:, 1] = np.pi
+    if cfg.show_sideways:
+        poses_padded[:, 1] = np.pi / 2
+
+    images = []
 
     # iterate over desired frames in sequence
     seq_len = len(poses_padded)
     num_iterations = seq_len // cfg.render_every_n_frame
     for i in range(max(num_iterations, 1)):
-        if cfg.show_accelerations and (i == 0 or i == num_iterations - 1):
-            continue
-
         idx_i = i * cfg.render_every_n_frame
         print("rendering frame {}".format(idx_i))
+        if cfg.show_accelerations and (
+            idx_i < cfg.acc_delta or num_iterations - cfg.acc_delta <= idx_i
+        ):
+            continue
+
         pose_i = poses_padded[[idx_i]]
 
         # lbs
@@ -160,16 +171,21 @@ def render_poses(poses_padded, smpl_model, cfg):
         joints_i = utils.copy2cpu(joints_i[0])
         rel_tfs_i = utils.copy2cpu(rel_tfs_i[0])
 
+        if (cfg.show_vertex_distance or cfg.show_gt) and poses_gt is not None:
+            gt_i = poses_gt[[idx_i]]
+            vertices_gt, _, _ = smpl_helpers.my_lbs(smpl_model, gt_i)
+            vertices_gt = utils.copy2cpu(vertices_gt[0])
+
         if cfg.show_accelerations:
-            pose_before = poses_padded[[(i - 1) * cfg.render_every_n_frame]]
-            pose_after = poses_padded[[(i + 1) * cfg.render_every_n_frame]]
+            pose_before = poses_padded[[idx_i - cfg.acc_delta]]
+            pose_after = poses_padded[[idx_i + cfg.acc_delta]]
             sens_ids = list(sensors.SENS_VERTS_SSP.values())
             vertices_before, _, _ = smpl_helpers.my_lbs(smpl_model, pose_before)
             vertices_after, _, _ = smpl_helpers.my_lbs(smpl_model, pose_after)
             vert_0 = utils.copy2cpu(vertices_before[0, sens_ids])
             vert_1 = vertices_i[sens_ids]
             vert_2 = utils.copy2cpu(vertices_after[0, sens_ids])
-            time_interval = cfg.render_every_n_frame / 60
+            time_interval = cfg.acc_delta / 60
             accs = (vert_0 - 2 * vert_1 + vert_2) / (time_interval ** 2)
 
         # compute meshes
@@ -178,6 +194,16 @@ def render_poses(poses_padded, smpl_model, cfg):
         # body mesh
         body_color = vis_tools.colors["grey"].copy()
         body_color.append(1 - cfg.body_transparency)
+        if cfg.show_vertex_distance and poses_gt is not None:
+            # interpolate between grey and red according to vertex distance between pred and gt
+            body_color = np.ones(vertices_i.shape) * 0.7
+            vert_diff = np.linalg.norm(vertices_i - vertices_gt, axis=1) * 3
+            color_diff = np.array(vis_tools.colors["red"]) - np.array(
+                vis_tools.colors["grey"]
+            )
+            body_color += np.minimum(
+                vert_diff.reshape([-1, 1]), 1.0
+            ) @ color_diff.reshape([1, 3])
         body_mesh = trimesh.Trimesh(
             vertices=vertices_i,
             faces=smpl_model.faces,
@@ -185,6 +211,17 @@ def render_poses(poses_padded, smpl_model, cfg):
         )
         if cfg.show_body:
             meshes.append(body_mesh)
+
+        # ground truth body mesh
+        if cfg.show_gt and poses_gt is not None:
+            body_color = vis_tools.colors["green"].copy()
+            body_color.append(0.4)
+            gt_mesh = trimesh.Trimesh(
+                vertices=vertices_gt,
+                faces=smpl_model.faces,
+                vertex_colors=body_color,
+            )
+            meshes.append(gt_mesh)
 
         # joint meshes
         if cfg.show_joints:
@@ -240,13 +277,22 @@ def render_poses(poses_padded, smpl_model, cfg):
                 tf[:3, 3] = vertices_i[vert_ind]
 
                 if cfg.show_sensor_orientations:
-                    ax = creation.axis(
-                        transform=tf,
-                        origin_size=0.007,
-                        origin_color=[0, 0, 0],
-                        axis_radius=0.005,
-                        axis_length=0.05,
-                    )
+                    if cfg.name == "leg_raise" and sensor == "right_knee":
+                        ax = creation.axis(
+                            transform=tf,
+                            origin_size=0.021,
+                            origin_color=[0, 0, 0],
+                            axis_radius=0.015,
+                            axis_length=0.15,
+                        )
+                    else:
+                        ax = creation.axis(
+                            transform=tf,
+                            origin_size=0.007,
+                            origin_color=[0, 0, 0],
+                            axis_radius=0.005,
+                            axis_length=0.05,
+                        )
 
                     meshes.append(ax)
                 else:
@@ -271,7 +317,7 @@ def render_poses(poses_padded, smpl_model, cfg):
         if cfg.show_accelerations:
             for i, acc in enumerate(accs):
                 cyl_orig = vert_1[i]
-                cyl_end = cyl_orig + acc / 30
+                cyl_end = cyl_orig + acc / 50
                 segment = np.array([cyl_orig, cyl_end])
                 cyl = creation.cylinder(radius=0.005, segment=segment)
                 cyl.visual.vertex_colors = vis_tools.colors["orange"]
@@ -281,15 +327,60 @@ def render_poses(poses_padded, smpl_model, cfg):
         if cfg.show_rendering:
             mv.viewer.render_lock.acquire()
         mv.set_static_meshes(meshes, smooth=cfg.smooth)
+
         if cfg.show_rendering:
             mv.viewer.render_lock.release()
             input("press enter to continue")
         else:
             # save file
             body_image = mv.render(render_wireframe=False)
-            filename = os.path.join(os.getcwd(), "files", cfg.name, str(idx_i) + ".png")
-            im_arr = np.expand_dims(body_image, axis=(0, 1, 2))
-            vis_tools.imagearray2file(im_arr, filename)
+
+            if cfg.make_gif:
+                # store frames for gif
+                images.append(body_image)
+
+            else:
+                filename = os.path.join(
+                    paths.DATA_PATH,
+                    paths.DOC_PATH,
+                    "images",
+                    cfg.name,
+                    str(idx_i) + "_" + cfg.name + ".png",
+                )
+                im_arr = np.expand_dims(body_image, axis=(0, 1, 2))
+                vis_tools.imagearray2file(im_arr, filename)
+
+    if cfg.make_gif:
+        filename = os.path.join(
+            paths.DATA_PATH, paths.DOC_PATH, "gifs", cfg.name + ".gif"
+        )
+        im_arr = np.stack(images)
+        im_arr = np.expand_dims(im_arr, axis=(0, 1))
+        vis_tools.imagearray2file(im_arr, filename, fps=cfg.gif_fps)
+
+
+def create_leg_raise_sequence():
+    joint_ind = sensors.SMPL_JOINT_IDS
+    def_pose = torch.zeros([sensors.NUM_SMPLX_JOINTS * 3])
+    def_pose[1] = np.pi / 6
+    def_pose[joint_ind["right_shoulder"] * 3 + 2] = np.pi / 3
+    def_pose[joint_ind["left_shoulder"] * 3 + 2] = -np.pi / 3
+    def_pose[joint_ind["right_elbow"] * 3 + 2] = np.pi / 9
+    def_pose[joint_ind["left_elbow"] * 3 + 2] = -np.pi / 9
+
+    num_frames = 60
+    poses = torch.zeros([2 * num_frames, sensors.NUM_SMPLX_JOINTS * 3])
+    for i in range(num_frames):
+        rand_i = i + 2 * (random.random() - 0.5)
+        def_pose[joint_ind["right_hip"] * 3] = -rand_i / num_frames * np.pi / 2
+        def_pose[joint_ind["right_knee"] * 3] = rand_i / num_frames * np.pi / 2
+        # add noise to make look more realistic
+        def_pose[3 : sensors.NUM_SMPL_JOINTS] += (
+            2 * torch.rand(sensors.NUM_SMPL_JOINTS - 3) - 1
+        ) / 200
+        poses[i] = def_pose
+        poses[2 * num_frames - 1 - i] = def_pose
+    return poses
 
 
 if __name__ == "__main__":

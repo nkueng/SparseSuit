@@ -1,7 +1,7 @@
 defaults:
   - default
 
-name: sensor_reduction
+name: eval_gt_overlay
 source: AMASS_SSP_nn
 models:
   - 2108230722-baseline-SSP19
@@ -19,11 +19,17 @@ assets:
   - [27, 2920]  # walking and rotating arms
 body_transparency: 0.0
 show_from_behind: False
+use_default_pose: False
 show_sensors: True
-render_frames: 10
-render_every_n_frame: 10
+show_vertex_distance: False
+show_gt: True
+render_frames: 100  # 10
+render_every_n_frame: 1  # 10
 show_rendering: False
 orthographic_camera: True
 camera_translation: [0, 0.5, 1.75]
+render_width: 800
+make_gif: False
+gif_fps: 15
 
 

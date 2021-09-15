@@ -9,8 +9,14 @@ source: AMASS
 asset_idx: 2
 frame_idx: -1
 show_rendering: True
+make_gif: False
+gif_fps: 15
 show_from_behind: False
+show_sideways: False
 show_body: True
+show_vertex_distance: False
+show_gt: False
+acc_delta: -1
 body_transparency: 0.0   # [0,1.0]
 show_joints: False
 show_skeleton: False

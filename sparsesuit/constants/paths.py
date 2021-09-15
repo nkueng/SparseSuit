@@ -36,3 +36,6 @@ TRAIN_FILE = "training.tar"
 VALID_FILE = "validation.tar"
 # to evaluate models after training for joint angles and positions
 TEST_FILE = "test.tar"
+
+## documentation folder
+DOC_PATH = "Documentation/"
