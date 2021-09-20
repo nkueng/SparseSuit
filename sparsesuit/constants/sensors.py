@@ -1,6 +1,6 @@
 # SMPL-X vertices of virtual sensors for MVN -> ordering sets convention
 SENS_VERTS_MVN = {
-    "head": 8942,
+    "neck": 8942,
     "pelvis": 5493,
     "sternum": 5528,
     "left_wrist": 4617,
@@ -28,7 +28,7 @@ SENS_VERTS_SSP = {
     "right_back": 6142,
     "left_collar": 5462,
     "right_collar": 8196,
-    "head": 8980,
+    "neck": 8980,
     "left_shoulder": 3952,
     "right_shoulder": 6700,
     "left_elbow": 4858,
@@ -59,9 +59,9 @@ SENS_JOINTS_IDS = {
     "sternum": 9,  # corresponds to spine3
     "left_foot": 10,
     "right_foot": 11,
+    "neck": 12,
     "left_collar": 13,
     "right_collar": 14,
-    "head": 15,
     "left_shoulder": 16,
     "right_shoulder": 17,
     "left_elbow": 18,
@@ -104,7 +104,7 @@ SENS_NAMES_DIP = [
     "right_elbow",
     "left_knee",
     "right_knee",
-    "head",
+    "neck",
     "pelvis",
 ]
 SENS_NAMES_MVN = list(SENS_VERTS_MVN.keys())
@@ -115,6 +115,8 @@ SMPL_DIP_JOINTS = [1, 2, 3, 4, 5, 6, 9, 12, 13, 14, 15, 16, 17, 18, 19]
 
 # indices of 19 SMPL joints used as targets for predictions in this project (excludes pelvis, feet, and hands)
 SMPL_SSP_JOINTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
+
+# the SMPL-X joints used for the visualization of the rig
 SMPLX_RIG_JOINTS = [
     0,
     1,
@@ -136,10 +138,10 @@ SMPLX_RIG_JOINTS = [
     17,
     18,
     19,
-    20,
-    21,
-    28,
-    43,
+    20,  # left wrist
+    21,  # right wrist
+    28,  # left middle finger
+    43,  # right middle finger
 ]
 NUM_SMPL_JOINTS = 24
 NUM_SMPLX_JOINTS = 55
@@ -171,28 +173,19 @@ SMPL_PARENTS = [
     21,
 ]
 # the 4 sensors/joints not used as input for SIP: hips and shoulders (providing accurate groundtruth)
-ANG_EVAL_JOINTS = [
-    1,
-    2,
-    16,
-    17,
-]
-# "virtual markers" to evaluate joint positional error: hips, knees, ankles, shoulders, elbows, wrists and neck
-POS_EVAL_JOINTS = [
-    1,
-    2,
-    4,
-    5,
-    7,
-    8,
-    12,
-    16,
-    17,
-    18,
-    19,
-    20,
-    21,
-]
+SIP_ANG_EVAL_JOINTS = [1, 2, 16, 17]
+
+# "virtual markers" to evaluate joint positional error in SIP and DIP:
+# hips, knees, ankles, shoulders, elbows, wrists and neck
+SIP_POS_EVAL_JOINTS = [1, 2, 4, 5, 7, 8, 12, 16, 17, 18, 19, 20, 21]
+
+# the joints used for evaluation in TransPose: all DIP prediction joints
+TP_POS_EVAL_JOINTS = SMPL_DIP_JOINTS  # TODO: this should include wrists and ankles
+TP_ANG_EVAL_JOINTS = SMPL_DIP_JOINTS
+
+# the joints we use for evaluation of joint errors: all our prediction joints
+POS_EVAL_JOINTS = SMPL_SSP_JOINTS  # TODO: this should include hands and feet
+ANG_EVAL_JOINTS = SMPL_SSP_JOINTS
 
 # mocap markers used for illustrative purposes
 MOCAP_MARKERS = [

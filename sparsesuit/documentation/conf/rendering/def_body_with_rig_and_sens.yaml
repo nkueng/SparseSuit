@@ -1,0 +1,11 @@
+defaults:
+  - default
+
+name: body_with_rig
+frame_idx: 4050
+show_joints: True
+show_skeleton: True
+show_rendering: False
+orthographic_camera: False
+camera_translation: [0, 0.0, 1.5]
+camera_angle: 0.0
