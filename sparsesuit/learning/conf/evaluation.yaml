@@ -1,5 +1,5 @@
 evaluation:
-  experiment: 2021.08.18-12:11-sym15in-SSP15
+  experiment: 2108251857-minimal_inner
   dataset: synthetic
   noise: False
   past_frames: 20
@@ -11,5 +11,9 @@ hydra:
   run:
     dir: .
   output_subdir: null
+  sweep:
+    dir: .
+    subdir: .
 defaults:
   - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
