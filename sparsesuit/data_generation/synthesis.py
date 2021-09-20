@@ -12,7 +12,7 @@ from omegaconf import DictConfig
 
 from normalization import Normalizer
 from sparsesuit.constants import paths, sensors
-from sparsesuit.utils import smpl_helpers, visualization, utils
+from sparsesuit.utils import smpl_helpers, utils
 
 
 class Synthesizer:
@@ -267,6 +267,8 @@ class Synthesizer:
         orientation, acceleration = self.get_ori_accel(rel_tfs, imu_vertices)
 
         if self.visualize:
+            from sparsesuit.utils import visualization
+
             vis_verts = [vertices[self.acc_delta : -self.acc_delta]]
             vis_joints = [
                 joints[

@@ -17,7 +17,7 @@ from smplx import lbs
 from welford import Welford
 
 from sparsesuit.constants import sensors, paths
-from sparsesuit.utils import visualization, smpl_helpers, utils
+from sparsesuit.utils import smpl_helpers, utils
 
 
 class Normalizer:
@@ -266,6 +266,8 @@ class Normalizer:
                 print("Normalized {}/{}".format(subject_i, motion_type_i))
 
                 if self.visualize:
+                    from sparsesuit.utils import visualization
+
                     frames = 300
                     vis_poses = np.tile(
                         np.eye(3), [frames, sensors.NUM_SMPLX_JOINTS, 1, 1]
