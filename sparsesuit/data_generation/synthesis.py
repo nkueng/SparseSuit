@@ -6,7 +6,6 @@ from pathlib import Path
 
 import hydra
 import numpy as np
-import pymusim
 import torch
 from omegaconf import DictConfig
 
@@ -205,11 +204,13 @@ class Synthesizer:
         orientation = np.concatenate(oris, axis=1)
 
         # IMU sim for noise
-        sensor_opt = pymusim.SensorOptions()
-        sensor_opt.set_gravity_axis(-1)  # disable additive gravity
         if self.add_noise:
+            import pymusim
+
+            sensor_opt = pymusim.SensorOptions()
+            sensor_opt.set_gravity_axis(-1)  # disable additive gravity
             sensor_opt.set_white_noise(self.acc_noise)
-        sensor = pymusim.BaseSensor(sensor_opt)
+            sensor = pymusim.BaseSensor(sensor_opt)
 
         # compute accelerations from subsequent frames and add noise with IMUsim
         acceleration = []
@@ -223,9 +224,10 @@ class Synthesizer:
             accel_tmp = (vertex_2 + vertex_0 - 2 * vertex_1) / (
                 time_interval * time_interval
             )
-            accel_tmp_noisy = np.array(sensor.transform_measurement(accel_tmp))
+            if self.add_noise:
+                accel_tmp = np.array(sensor.transform_measurement(accel_tmp))
 
-            acceleration.append(accel_tmp_noisy)
+            acceleration.append(accel_tmp)
 
         return orientation[self.acc_delta : -self.acc_delta], np.asarray(acceleration)
 
