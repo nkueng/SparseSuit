@@ -1,3 +1,6 @@
+"""
+A collection of utility functions for all sorts of things.
+"""
 import logging
 import os
 import random
@@ -165,4 +168,31 @@ def copy2cpu(tensor):
 
 
 def get_project_folder():
+    """
+    Returns path to sparsesuit module folder.
+    """
     return os.path.join(os.getcwd().split("sparsesuit")[0], "sparsesuit")
+
+
+def rot_mat(angle=0.0, axis="x"):
+    ang = angle / 180 * np.pi
+    cos_ = np.cos(ang)
+    sin_ = np.sin(ang)
+    mat = np.eye(3)
+    if axis == "x":
+        mat[1, 1] = cos_
+        mat[1, 2] = -sin_
+        mat[2, 1] = sin_
+        mat[2, 2] = cos_
+    elif axis == "y":
+        mat[0, 0] = cos_
+        mat[0, 2] = sin_
+        mat[2, 0] = -sin_
+        mat[2, 2] = cos_
+    elif axis == "z":
+        mat[0, 0] = cos_
+        mat[0, 1] = -sin_
+        mat[1, 0] = sin_
+        mat[1, 1] = cos_
+
+    return mat

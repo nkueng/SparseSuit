@@ -1,0 +1,24 @@
+defaults:
+  - sensor_config
+
+name: sensor_config_15_asym_2
+sensors:
+ - left_pelvis
+ - right_pelvis
+ - left_back
+ - right_back
+ - left_collar
+ - right_collar
+ - neck
+# - left_shoulder
+ - right_shoulder
+ - left_elbow
+# - right_elbow
+ - left_wrist
+ - right_wrist
+# - left_hip
+ - right_hip
+ - right_ankle
+ - left_ankle
+ - left_knee
+# - right_knee

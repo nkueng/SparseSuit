@@ -1,3 +1,6 @@
+"""
+A collection of utility functions that deal with the SMPL model.
+"""
 import os
 import numpy as np
 import smplx
@@ -250,3 +253,35 @@ def smpl_rot_to_global(smpl_rotations_local):
         out = np.reshape(out, in_shape)
 
     return out
+
+
+def generate_relaxed_pose():
+    """
+    Generates the SMPL-X joint orientations for a "relaxed" pose with the arms on the side.
+    :return: torch.Tensor
+    """
+    joint_ind = sensors.SMPL_JOINT_IDS
+    pose = np.zeros([sensors.NUM_SMPLX_JOINTS, 3])
+
+    # collar rotation
+    rot = utils.rot_mat(10, "y")
+    aa = utils.rot_matrix_to_aa(rot.reshape([1, -1])).reshape([3])
+
+    pose[joint_ind["right_collar"]] = -aa
+    pose[joint_ind["left_collar"]] = aa
+
+    # shoulder rotation
+    rot = utils.rot_mat(66, "z")
+    aa = utils.rot_matrix_to_aa(rot.reshape([1, -1])).reshape([3])
+
+    pose[joint_ind["right_shoulder"]] = aa
+    pose[joint_ind["left_shoulder"]] = -aa
+
+    # elbow rotation
+    rot = utils.rot_mat(45, "x")
+    aa = utils.rot_matrix_to_aa(rot.reshape([1, -1])).reshape([3])
+
+    pose[joint_ind["right_elbow"]] = -aa
+    pose[joint_ind["left_elbow"]] = -aa
+
+    return torch.Tensor(pose.reshape([1, -1]))

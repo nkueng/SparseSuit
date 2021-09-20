@@ -1,21 +1,13 @@
 defaults:
-  - default
+  - synthesis
 
-name: synthesis_just_sensors
-source: AMASS
-asset_idx: 6
-frame_idx: -1
-render_width: 600
-show_body: False
-body_transparency: 0.1
-show_sensor_orientations: True
-show_accelerations: True
-use_default_pose: False
-show_sideways: True
-render_every_n_frame: 1
-acc_delta: 4
+name: synthesis_just_model
+show_body: True
+body_transparency: 0.0
+show_sensors: False
+show_sensor_orientations: False
+show_accelerations: False
+
 show_rendering: False
-orthographic_camera: True
-camera_translation: [0, 0.5, 1.75]
 make_gif: False
 gif_fps: 15

@@ -4,7 +4,6 @@ defaults:
 name: synthesis
 source: AMASS
 asset_idx: 6
-frame_idx: -1
 render_width: 600
 body_transparency: 0.1
 show_sensor_orientations: True
@@ -17,4 +16,3 @@ show_rendering: False
 orthographic_camera: True
 camera_translation: [0, 0.5, 1.75]
 make_gif: False
-gif_fps: 15

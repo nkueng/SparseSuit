@@ -1,11 +1,12 @@
 defaults:
   - default
 
-name: body_with_rig
-frame_idx: 4050
+name: def_body_with_rig_and_sens
+use_default_pose: True
 show_joints: True
 show_skeleton: True
 show_rendering: False
+body_transparency: 0.5
 orthographic_camera: False
-camera_translation: [0, 0.0, 1.5]
-camera_angle: 0.0
+#camera_translation: [0, 0.0, 1.5]
+#camera_angle: 0.0

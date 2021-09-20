@@ -127,8 +127,10 @@ class Synthesizer:
         }
         utils.write_config(path=self.trgt_dir, config=ds_config)
 
-    # Extract pose parameter from src_path, save to res_path
     def synthesize_asset(self, src_path, res_path):
+        """
+        Extract pose parameter from src_path, synthesize asset, then save to res_path.
+        """
         # load from pickle or npz
         data_in = {}
         if src_path.endswith(".npz"):
@@ -245,6 +247,8 @@ class Synthesizer:
 
             # load relevant smpl model onto GPU if desired
             smpl_model = self.smpl_models[gender].to(self.device)
+
+            # do lbs for given poses
             vertices_k, joints_k, rel_tfs_k = smpl_helpers.my_lbs(
                 smpl_model, poses_torch
             )

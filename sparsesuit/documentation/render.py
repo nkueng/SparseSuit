@@ -28,11 +28,12 @@ def render_from_config(cfg: DictConfig):
     smpl_faces = utils.copy2cpu(smpl_model.faces)
 
     # decide on pose
-    if cfg.use_default_pose:
-        poses_padded = torch.zeros([1, sensors.NUM_SMPLX_JOINTS * 3])
+    if cfg.use_relaxed_pose:
+        poses_padded = smpl_helpers.generate_relaxed_pose()
 
     elif cfg.name == "leg_raise":
         poses_padded = create_leg_raise_sequence()
+
     else:
         # load pose data from one of the datasets
         if cfg.source == "AMASS":
@@ -87,12 +88,22 @@ def render_from_config(cfg: DictConfig):
                     predictions[model] = list(data_in.values())
                     # load model config
                     sens[model] = utils.load_config(model_path).experiment.sensors
+                    sens[model].append("left_pelvis")
+                    sens[model].append("right_pelvis")
+
+        elif cfg.use_default_pose:
+            poses_padded = torch.zeros([1, sensors.NUM_SMPLX_JOINTS * 3])
         else:
             raise NameError("Desired source of motion asset is unclear")
 
         if cfg.frame_idx != -1:
             assert cfg.frame_idx <= len(poses_padded), "invalid frame index, aborting!"
             poses_padded = poses_padded[[cfg.frame_idx]]
+
+    if cfg.make_gif:
+        # render every frame for smooth gifs
+        cfg.render_frames *= cfg.render_every_n_frame
+        cfg.render_every_n_frame = 1
 
     if cfg.source == "AMASS_SSP_nn":
         if "models" in cfg:
@@ -258,11 +269,11 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None):
                 sensors.SENS_VERTS_SSP.keys() if cfg.sensors == "all" else cfg.sensors
             )
             for sensor, vert_ind in sensors.SENS_VERTS_SSP.items():
-                if (
-                    sensor not in ["left_pelvis", "right_pelvis"]
-                    and sensor not in chosen_sensors
-                ):
-                    continue
+                unused = False
+                if sensor not in chosen_sensors:
+                    unused = True
+                    if not cfg.show_unused_sensors:
+                        continue
 
                 ori_ind = sensors.SENS_JOINTS_IDS[sensor]
                 # vert_norm = body_mesh.vertex_normals[vert_ind]
@@ -301,7 +312,11 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None):
                         extents=[0.03, 0.03, 0.03],
                         transform=tf,
                     )
-                    box.visual.vertex_colors = vis_tools.colors["orange"]
+                    color = vis_tools.colors["orange"].copy()
+                    if unused:
+                        color = vis_tools.colors["black"].copy()
+                        color.append(0.5)
+                    box.visual.vertex_colors = color
                     meshes.append(box)
 
         # meshes for "mocap markers"
@@ -340,12 +355,15 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None):
                 images.append(body_image)
 
             else:
+                filename = cfg.name
+                if "/" in filename:
+                    filename = filename.split("/")[1]
                 filename = os.path.join(
                     paths.DATA_PATH,
                     paths.DOC_PATH,
                     "images",
                     cfg.name,
-                    str(idx_i) + "_" + cfg.name + ".png",
+                    str(idx_i) + "_" + filename + ".png",
                 )
                 im_arr = np.expand_dims(body_image, axis=(0, 1, 2))
                 vis_tools.imagearray2file(im_arr, filename)
@@ -377,7 +395,7 @@ def create_leg_raise_sequence():
         # add noise to make look more realistic
         def_pose[3 : sensors.NUM_SMPL_JOINTS] += (
             2 * torch.rand(sensors.NUM_SMPL_JOINTS - 3) - 1
-        ) / 200
+        ) / 400
         poses[i] = def_pose
         poses[2 * num_frames - 1 - i] = def_pose
     return poses

@@ -5,7 +5,7 @@ camera_translation: [0, 0.65, 2]
 camera_angle: 15
 orthographic_camera: False
 smooth: False
-source: AMASS
+source: None
 asset_idx: 2
 frame_idx: -1
 show_rendering: True
@@ -25,6 +25,8 @@ show_sensor_orientations: False
 show_accelerations: False
 show_markers: False
 use_default_pose: True
+use_relaxed_pose: False
 render_every_n_frame: 30
 sensors: all
+show_unused_sensors: False
 

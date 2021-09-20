@@ -1,7 +1,6 @@
 import datetime
 import logging
 import os
-import random
 import sys
 import time
 
@@ -69,7 +68,9 @@ class Trainer:
         for k, v in hyperparams_diff.items():
             self.experiment_name += "-" + k + str(v)
 
-        self.model_path = os.path.join(os.getcwd(), "runs/" + self.experiment_name)
+        self.model_path = os.path.join(
+            utils.get_project_folder(), "learning/runs/" + self.experiment_name
+        )
         self.writer = SummaryWriter(self.model_path)
 
         # logger setup

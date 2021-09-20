@@ -62,6 +62,7 @@ SENS_JOINTS_IDS = {
     "neck": 12,
     "left_collar": 13,
     "right_collar": 14,
+    "head": 15,
     "left_shoulder": 16,
     "right_shoulder": 17,
     "left_elbow": 18,

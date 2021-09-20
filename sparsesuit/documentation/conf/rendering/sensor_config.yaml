@@ -1,10 +1,9 @@
 defaults:
   - default
 
-name: body_with_sensors
+name: sensor_config
 render_width: 600
-render_height: 800
-show_rendering: True
+show_rendering: False
 orthographic_camera: True
 use_relaxed_pose: True
 use_default_pose: False
@@ -21,7 +20,7 @@ sensors:
  - right_back
  - left_collar
  - right_collar
-# - head
+ - neck
  - left_shoulder
  - right_shoulder
  - left_elbow

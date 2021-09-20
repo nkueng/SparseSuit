@@ -2,7 +2,7 @@ name: minimal_inner
 config: SSP
 count: 7
 sensors:
-  - head
+  - neck
   - left_elbow
   - right_elbow
   - left_knee

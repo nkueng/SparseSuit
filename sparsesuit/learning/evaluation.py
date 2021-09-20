@@ -61,8 +61,9 @@ class Evaluator:
         self.future_frames = self.eval_config.future_frames
 
         # load training configuration of experiment
-        # TODO: makes this stable with file directory instead of working directory
-        self.exp_path = os.path.join(os.getcwd(), "runs/", self.eval_config.experiment)
+        self.exp_path = os.path.join(
+            utils.get_project_folder(), "learning/runs/", self.eval_config.experiment
+        )
         self.train_config = utils.load_config(self.exp_path)
 
         # cuda setup
@@ -216,7 +217,7 @@ class Evaluator:
                     for p in pose_trgt
                 ]
 
-                # keep track of predicted poses
+                # keep track of predicted poses for saving later
                 predicted_poses[filename[0]] = pose_pred
 
                 # rotate root for upright human-beings
@@ -250,41 +251,68 @@ class Evaluator:
 
         # summarize errors
         metrics = {
-            "avg_sip_ang_err": round(
+            # our metrics
+            "avg_total_ang_err": round(
                 float(np.mean(stats_ang_err.mean[sensors.ANG_EVAL_JOINTS])), 2
             ),
-            "std_sip_ang_err": round(
+            "std_total_ang_err": round(
                 float(np.mean(np.sqrt(stats_ang_err.var_p[sensors.ANG_EVAL_JOINTS]))), 2
             ),
-            "avg_total_ang_err": round(float(np.mean(stats_ang_err.mean)), 2),
-            "std_total_ang_err": round(float(np.mean(np.sqrt(stats_ang_err.var_p))), 2),
-            "avg_sip_pos_err": round(
+            "avg_total_pos_err": round(
                 float(np.mean(stats_pos_err.mean[sensors.POS_EVAL_JOINTS])), 2
             ),
-            "std_sip_pos_err": round(
+            "std_total_pos_err": round(
                 float(np.mean(np.sqrt(stats_pos_err.var_p[sensors.POS_EVAL_JOINTS]))), 2
             ),
-            "avg_total_pos_err": round(float(np.mean(stats_pos_err.mean)), 2),
-            "std_total_pos_err": round(float(np.mean(np.sqrt(stats_pos_err.var_p))), 2),
+            # TransPose
+            "avg_tp_ang_err": round(
+                float(np.mean(stats_ang_err.mean[sensors.TP_ANG_EVAL_JOINTS])), 2
+            ),
+            "std_tp_ang_err": round(
+                float(
+                    np.mean(np.sqrt(stats_ang_err.var_p[sensors.TP_ANG_EVAL_JOINTS]))
+                ),
+                2,
+            ),
+            "avg_tp_pos_err": round(
+                float(np.mean(stats_pos_err.mean[sensors.TP_POS_EVAL_JOINTS])), 2
+            ),
+            "std_tp_pos_err": round(
+                float(
+                    np.mean(np.sqrt(stats_pos_err.var_p[sensors.TP_POS_EVAL_JOINTS]))
+                ),
+                2,
+            ),
+            # SIP & DIP
+            "avg_sip_ang_err": round(
+                float(np.mean(stats_ang_err.mean[sensors.SIP_ANG_EVAL_JOINTS])), 2
+            ),
+            "std_sip_ang_err": round(
+                float(
+                    np.mean(np.sqrt(stats_ang_err.var_p[sensors.SIP_ANG_EVAL_JOINTS]))
+                ),
+                2,
+            ),
+            "avg_sip_pos_err": round(
+                float(np.mean(stats_pos_err.mean[sensors.SIP_POS_EVAL_JOINTS])), 2
+            ),
+            "std_sip_pos_err": round(
+                float(
+                    np.mean(np.sqrt(stats_pos_err.var_p[sensors.SIP_POS_EVAL_JOINTS]))
+                ),
+                2,
+            ),
+            # loss function
             "avg_loss": round(float(stats_loss.mean), 2),
             "std_loss": round(float(np.sqrt(stats_loss.var_p)), 2),
+            # jerk
             "avg_jerk": round(float(np.mean(stats_jerk.mean) / 100), 2),
             "std_jerk": round(float(np.mean(np.sqrt(stats_jerk.var_p)) / 100), 2),
         }
 
         self.logger.info(
-            "Average SIP joint angle error (deg): {:.2f} (+/- {:.2f})".format(
-                metrics["avg_sip_ang_err"], metrics["std_sip_ang_err"]
-            )
-        )
-        self.logger.info(
             "Average total joint angle error (deg): {:.2f} (+/- {:.2f})".format(
                 metrics["avg_total_ang_err"], metrics["std_total_ang_err"]
-            )
-        )
-        self.logger.info(
-            "Average SIP joint position error (cm): {:.2f} (+/- {:.2f})".format(
-                metrics["avg_sip_pos_err"], metrics["std_sip_pos_err"]
             )
         )
         self.logger.info(
@@ -293,11 +321,20 @@ class Evaluator:
             )
         )
         self.logger.info(
+            "Average SIP joint angle error (deg): {:.2f} (+/- {:.2f})".format(
+                metrics["avg_sip_ang_err"], metrics["std_sip_ang_err"]
+            )
+        )
+        self.logger.info(
+            "Average SIP joint position error (cm): {:.2f} (+/- {:.2f})".format(
+                metrics["avg_sip_pos_err"], metrics["std_sip_pos_err"]
+            )
+        )
+        self.logger.info(
             "Average loss: {:.2f} (+/- {:.2f})".format(
                 metrics["avg_loss"], metrics["std_loss"]
             )
         )
-
         self.logger.info(
             "Average jerk (100m/s^3): {:.2f} (+/- {:.2f})".format(
                 metrics["avg_jerk"], metrics["std_jerk"]

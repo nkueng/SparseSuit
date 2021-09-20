@@ -10,11 +10,10 @@ sensors:
   - left_knee
   - right_elbow
   - left_elbow
-  - head
-use_default_pose: False
+  - neck
 render_every_n_frame: 1
 show_rendering: False
 orthographic_camera: True
 camera_translation: [0, 0.5, 1.75]
-make_gif: True
+make_gif: False
 gif_fps: 30
