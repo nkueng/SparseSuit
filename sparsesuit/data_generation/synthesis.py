@@ -17,6 +17,7 @@ from sparsesuit.utils import smpl_helpers, utils
 
 class Synthesizer:
     def __init__(self, cfg):
+        self.cfg = cfg
         # synthesis parameters
         self.sens_config = cfg.dataset.config
         self.acc_delta = cfg.dataset.acc_delta
@@ -244,7 +245,11 @@ class Synthesizer:
 
         # extract poses of all joints (used for orientation of IMUs/body segments)
         batch_size = len(poses)
-        max_chunk_size = 1000 if self.device == torch.device("cuda") else 3000
+        max_chunk_size = (
+            self.cfg.gpu_chunks
+            if self.device == torch.device("cuda")
+            else self.cfg.cpu_chunks
+        )
         num_chunks = batch_size // max_chunk_size + 1
         vertices, joints, rel_tfs = [], [], []
         for k in range(num_chunks):

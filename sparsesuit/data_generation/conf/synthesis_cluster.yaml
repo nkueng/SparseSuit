@@ -8,25 +8,32 @@ dataset:
   smpl_genders: [male, female]
   tar: False
 visualize: False
-debug: False
+debug: True
 skip_existing: True
 gpu: True
+gpu_chunks: 750
+cpu_chunks: 3000
 
 defaults:
  - override hydra/job_logging: disabled
  - override hydra/hydra_logging: disabled
 # - override hydra/launcher: submitit_local
- - override hydra/launcher: submitit_slurm
+# - override hydra/launcher: submitit_slurm
  - _self_
 
 hydra:
 #  setup for slurm
-  launcher:
-    timeout_min: 300
-    cpus_per_task: 1
-    mem_gb: 2
-    additional_parameters: {"partition": "gpu", "gres": "gpu:titanrtx:1", "mail-user": "mjd957@alumni.ku.dk", "mail-type": "BEGIN,END,FAIL,TIME_LIMIT_80"}
-    array_parallelism: 4
+#  launcher:
+#    timeout_min: 300
+#    cpus_per_task: 1
+#    mem_gb: 2
+#    additional_parameters: {
+#      "partition": "gpu",
+#      "gres": "gpu:titanrtx:1",
+##      "mail-user": "mjd957@alumni.ku.dk",
+##      "mail-type": "BEGIN,END,FAIL,TIME_LIMIT_80"
+#    }
+#    array_parallelism: 4
 
   run:
     dir: .

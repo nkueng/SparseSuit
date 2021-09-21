@@ -11,6 +11,8 @@ visualize: False
 debug: False
 skip_existing: True
 gpu: True
+gpu_chunks: 750
+cpu_chunks: 3000
 
 hydra:
   run:
