@@ -1,6 +1,7 @@
 import time
 import pyrender
 import trimesh
+from trimesh import creation
 import numpy as np
 
 
@@ -56,7 +57,7 @@ def vis_smpl(
                 else [0.3, 0.3, 0.3, 0.8]
             )
             tri_mesh = trimesh.Trimesh(vertex[i], faces, vertex_colors=vertex_color)
-            mesh = pyrender.Mesh.from_trimesh(tri_mesh)
+            mesh = pyrender.Mesh.from_trimesh(tri_mesh, smooth=False)
             nodes.append(pyrender.Node(mesh=mesh, translation=transl[v]))
 
             # if export:
@@ -66,28 +67,28 @@ def vis_smpl(
         # joints of SMPL model
         if joints is not None:
             for j, joint in enumerate(joints):
-                sm = trimesh.creation.uv_sphere(radius=0.005)
+                sm = creation.uv_sphere(radius=0.005)
                 sm.visual.vertex_colors = [0.9, 0.1, 0.1, 1.0]
                 tfs = np.tile(np.eye(4), (joint.shape[1], 1, 1))
                 tfs[:, :3, 3] = joint[i]
-                joint_pcl = pyrender.Mesh.from_trimesh(sm, poses=tfs)
+                joint_pcl = pyrender.Mesh.from_trimesh(sm, poses=tfs, smooth=False)
                 nodes.append(pyrender.Node(mesh=joint_pcl, translation=transl[j]))
 
         # IMU sensors placed on SMPL model (optionally rotated by orientation measurements)
         if sensors is not None:
             for s, sensor in enumerate(sensors):
                 if oris is not None:
-                    sens = trimesh.creation.axis(
+                    sens = creation.axis(
                         origin_size=0.005, axis_radius=0.003, axis_length=0.03
                     )
                 else:
-                    sens = trimesh.creation.uv_sphere(radius=0.015)
-                sens.visual.vertex_colors = [0, 0, 0, 1.0]
+                    sens = creation.uv_sphere(radius=0.015)
+                # sens.visual.vertex_colors = [0, 0, 0, 1.0]
                 tfs = np.tile(np.eye(4), (sensor.shape[1], 1, 1))
                 if oris is not None:
                     tfs[:, :3, :3] = oris[s][i]
                 tfs[:, :3, 3] = sensor[i]
-                sens_pcl = pyrender.Mesh.from_trimesh(sens, poses=tfs)
+                sens_pcl = pyrender.Mesh.from_trimesh(sens, poses=tfs, smooth=False)
                 nodes.append(pyrender.Node(mesh=sens_pcl, translation=transl[s]))
 
         # visualize accelerometer measurements as green cylinders with origins at sensors
@@ -98,10 +99,10 @@ def vis_smpl(
                     cyl_orig = sensors[a][i, m]
                     cyl_end = cyl_orig + meas / 100
                     endpoints = np.array([cyl_orig, cyl_end])
-                    cyl = trimesh.creation.cylinder(radius=0.005, segment=endpoints)
-                    cyl.visual.vertex_colors = [0.1, 0.9, 0.1, 1.0]
+                    cyl = creation.cylinder(radius=0.005, segment=endpoints)
+                    cyl.visual.vertex_colors = [1, 0.2, 0, 1.0]
                     cyls.append(cyl)
-                cyl_pcl = pyrender.Mesh.from_trimesh(cyls)
+                cyl_pcl = pyrender.Mesh.from_trimesh(cyls, smooth=False)
                 nodes.append(pyrender.Node(mesh=cyl_pcl, translation=transl[a]))
 
         nodes_buffer.append(nodes)

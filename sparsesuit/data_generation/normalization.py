@@ -36,30 +36,9 @@ class Normalizer:
         # choose dataset folder based on params
         if self.dataset_type == "synthetic":
             src_folder = paths.AMASS_PATH
-            self.has_noise = cfg.dataset.noise
-            if self.debug:
-                src_folder += "_debug"
-            if self.sens_config == "SSP":
-                src_folder += "_SSP"
-                sens_names = sensors.SENS_NAMES_SSP
-                self.pred_trgt_joints = sensors.SMPL_SSP_JOINTS
-
-            elif self.sens_config == "MVN":
-                src_folder += "_MVN"
-                sens_names = sensors.SENS_NAMES_MVN
-                self.pred_trgt_joints = sensors.SMPL_DIP_JOINTS
-
-            else:
-                raise NameError("Invalid dataset configuration. Aborting!")
-
-            sensor_ids = np.arange(0, len(sens_names))
-
-            if self.has_noise:
-                src_folder += "_noisy"
-            self.src_dir = os.path.join(paths.DATA_PATH, src_folder)
 
         elif self.dataset_type == "real":
-            self.src_dir = os.path.join(paths.DATA_PATH, paths.DIP_17_PATH)
+            src_folder = paths.DIP_17_PATH
             # dict mapping subject and motion types to datasets
             self.dataset_mapping = {
                 "s_09": "test",
@@ -68,13 +47,36 @@ class Normalizer:
                 "s_03/05": "validation",
                 "s_07/04": "validation",
             }
-            sens_names = sensors.SENS_NAMES_MVN
-            # change ordering of DIP to AMASS convention
-            sensor_ids = [sensors.SENS_NAMES_DIP.index(sensor) for sensor in sens_names]
 
         else:
             raise NameError("Invalid dataset configuration. Aborting!")
 
+        # adapt to sensor configuration
+        if self.debug and self.dataset_type == "synthetic":
+            src_folder += "_debug"
+
+        if self.sens_config == "SSP":
+            if self.dataset_type == "synthetic":
+                src_folder += "_SSP"
+            sens_names = sensors.SENS_NAMES_SSP
+            self.pred_trgt_joints = sensors.SMPL_SSP_JOINTS
+
+        elif self.sens_config == "MVN":
+            if self.dataset_type == "synthetic":
+                src_folder += "_MVN"
+            sens_names = sensors.SENS_NAMES_MVN
+            self.pred_trgt_joints = sensors.SMPL_DIP_JOINTS
+
+        else:
+            raise NameError("Invalid dataset configuration. Aborting!")
+
+        sensor_ids = np.arange(0, len(sens_names))
+
+        if "noise" in cfg.dataset:
+            if cfg.dataset.noise:
+                src_folder += "_noisy"
+
+        self.src_dir = os.path.join(paths.DATA_PATH, src_folder)
         self.norm_dir = self.src_dir + "_n"
         self.trgt_dir = self.src_dir + "_nn"
         self.dataset_names = ["training", "validation", "test"]
@@ -199,11 +201,11 @@ class Normalizer:
 
                 # normalize orientation and acceleration for each frame w.r.t. root
                 if self.sens_config == "SSP":
-                    # get hip sensor orientations
-                    hip_oris = np.reshape(oris_sorted[:, self.root_indx], [-1, 9])
+                    # get root sensor orientations
+                    root_oris = np.reshape(oris_sorted[:, self.root_indx], [-1, 9])
                     # transform to angle-axis
                     hip_aas = np.reshape(
-                        utils.rot_matrix_to_aa(hip_oris), [new_seq_length, 2, 3]
+                        utils.rot_matrix_to_aa(root_oris), [new_seq_length, 2, 3]
                     )
                     # compute mean
                     root_aa = np.mean(hip_aas, axis=1)
@@ -283,11 +285,12 @@ class Normalizer:
                     from sparsesuit.utils import visualization
 
                     frames = 300
+                    frame_range = range(2 * frames, 3 * frames)
                     vis_poses = np.tile(
                         np.eye(3), [frames, sensors.NUM_SMPLX_JOINTS, 1, 1]
                     )
                     vis_poses[:, self.pred_trgt_joints] = np.reshape(
-                        poses_vec_sel[:frames], [frames, -1, 3, 3]
+                        poses_vec_sel[frame_range], [frames, -1, 3, 3]
                     )
                     # vis_poses[:, 0] = np.array([[1.20919958, 1.20919958, 1.20919958]])
                     poses_torch = torch.from_numpy(vis_poses).float()
@@ -299,9 +302,10 @@ class Normalizer:
                     )
 
                     verts_np, joints_np = (
-                        verts.detach().numpy(),
-                        joints.detach().numpy()[:, : sensors.NUM_SMPL_JOINTS],
+                        utils.copy2cpu(verts),
+                        utils.copy2cpu(joints)[:, : sensors.NUM_SMPL_JOINTS],
                     )
+
                     if self.sens_config == "SSP":
                         vertex_ids = [
                             sensors.SENS_VERTS_SSP[sensor_name]
@@ -315,8 +319,8 @@ class Normalizer:
 
                     vertices = [verts_np]
                     vis_sensors = [verts_np[:, vertex_ids]]
-                    orientations = [np.squeeze(oris_norm_wo_root[:frames])]
-                    accelerations = [np.squeeze(accs_norm_wo_root[:frames])]
+                    orientations = [np.squeeze(oris_norm_wo_root[frame_range])]
+                    accelerations = [np.squeeze(accs_norm_wo_root[frame_range])]
                     visualization.vis_smpl(
                         faces=smpl_model.faces,
                         vertices=vertices,

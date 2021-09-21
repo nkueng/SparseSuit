@@ -23,8 +23,8 @@ else:
 AMASS_PATH = "Synthetic/AMASS"  # motion assets given as SMPL joints
 
 # real data
-DIP_17_PATH = "Real/DIP_IMU_17/"
-DIP_17_NN_PATH = "Real/DIP_IMU_17_nn/"
+DIP_17_PATH = "Real/DIP_IMU_17"
+DIP_17_NN_PATH = "Real/DIP_IMU_17_nn"
 
 # smpl model data
 SMPL_PATH = "SMPL_models/"
