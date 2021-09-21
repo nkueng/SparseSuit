@@ -1,7 +1,4 @@
 """ A script to handle the synthesis of IMU data from 17 sensors based on the AMASS dataset of SMPL pose data. """
-import os
-import sys
-
 import hydra
 import submitit
 from omegaconf import DictConfig

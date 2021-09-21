@@ -1,12 +1,23 @@
+dataset:
+  config: SSP
+  type: synthetic
+  acc_delta: 4
+  noise: False
+  acc_noise: 0.0
+  fps: 60
+  smpl_genders: [male, female]
+  tar: False
+visualize: False
 debug: False
+skip_existing: True
+gpu: True
+
 defaults:
- - synthesis
  - override hydra/job_logging: disabled
  - override hydra/hydra_logging: disabled
 # - override hydra/launcher: submitit_local
  - override hydra/launcher: submitit_slurm
  - _self_
-
 
 hydra:
 #  setup for slurm
