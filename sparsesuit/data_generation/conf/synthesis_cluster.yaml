@@ -10,7 +10,7 @@ dataset:
 visualize: False
 debug: False
 skip_existing: True
-gpu: True
+gpu: False
 gpu_chunks: 500
 cpu_chunks: 3000
 
@@ -27,12 +27,12 @@ hydra:
     timeout_min: 300
     cpus_per_task: 1
     mem_gb: 2
-    additional_parameters: {
-      "partition": "gpu",
-      "gres": "gpu:titanrtx:1",
+#    additional_parameters: {
+#      "partition": "gpu",
+#      "gres": "gpu:titanrtx:1",
 #      "mail-user": "mjd957@alumni.ku.dk",
 #      "mail-type": "BEGIN,END,FAIL,TIME_LIMIT_80"
-    }
+#    }
     array_parallelism: 4
 
   run:
