@@ -1,4 +1,5 @@
 """ A script to handle the synthesis of IMU data from 17 sensors based on the AMASS dataset of SMPL pose data. """
+import logging
 import os
 import pickle as pkl
 import time
@@ -51,16 +52,22 @@ class Synthesizer:
         if self.add_noise:
             target_name += "_noisy"
 
-        print("Source data: {}".format(self.src_dir))
-
         self.trgt_dir = os.path.join(paths.DATA_PATH, target_name)
         self.joint_ids = [sensors.SENS_JOINTS_IDS[sensor] for sensor in self.sens_names]
+
+        # logger setup
+        log_level = logging.DEBUG if cfg.debug else logging.INFO
+        self.logger = utils.configure_logger(
+            name="synthesis", log_path=self.trgt_dir, level=log_level
+        )
+        self.logger.info("Synthesis\n*******************\n")
+        self.logger.info("Source data: {}".format(self.src_dir))
 
         # use gpu if desired and cuda is available
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() and cfg.gpu else "cpu"
         )
-        print("Using {} device".format(self.device))
+        self.logger.info("Using {} device".format(self.device))
 
         # load SMPL model(s) on CPU (move to GPU later)
         self.smpl_models = smpl_helpers.load_smplx_genders(
@@ -94,18 +101,20 @@ class Synthesizer:
 
                 # skip this asset, if the target_path already exists
                 if self.skip_existing and os.path.exists(target_path):
-                    print("Skipping existing {}.".format(file))
+                    self.logger.info("Skipping existing {}.".format(file))
                     self.asset_counter += 1
                     continue
 
                 # synthesize sensor data from this motion asset
                 Path(target_dir).mkdir(parents=True, exist_ok=True)
-                print("Synthesizing {}.".format(file))
+                self.logger.info("Synthesizing {}.".format(file))
                 if self.synthesize_asset(file_path, target_path):
                     self.asset_counter += 1
 
         self.write_config()
-        print("Total synthesis runtime: {}s".format(time.perf_counter() - t0))
+        self.logger.info(
+            "Total synthesis runtime: {}s".format(time.perf_counter() - t0)
+        )
 
     def write_config(self):
         # save configuration file for synthetic dataset
@@ -146,12 +155,12 @@ class Synthesizer:
             try:
                 fps_ori = data_in["frame_rate"]
             except KeyError:
-                print("No framerate specified. Skipping!")
+                self.logger.info("No framerate specified. Skipping!")
                 return False
 
         # early exit for sequences of less than 300 frames
         if data_in["poses"].shape[0] < 300:
-            print("Fewer than 300 frames. Skipping!")
+            self.logger.info("Fewer than 300 frames. Skipping!")
             return False
 
         data_out = {}
@@ -164,7 +173,7 @@ class Synthesizer:
         # skip if asset contains less than 300 frames (after synthesis)
         frames_after = data_out["gt"].shape[0] - 2 * self.acc_delta
         if frames_after < 300:
-            print("Fewer than 300 frames after synthesis. Skipping!")
+            self.logger.info("Fewer than 300 frames after synthesis. Skipping!")
             return False
 
         # limit sequences to 11000 frames (empirical)
@@ -174,7 +183,7 @@ class Synthesizer:
         # simulate IMU data for given SMPL mesh and poses
         gender = utils.str2gender(str(data_in["gender"]))
         if gender is None:
-            print("Gender could not be derived. Skipping!")
+            self.logger.info("Gender could not be derived. Skipping!")
             return False
         data_out["imu_ori"], data_out["imu_acc"] = self.compute_imu_data(
             gender,
@@ -191,7 +200,7 @@ class Synthesizer:
         with open(res_path, "wb") as fout:
             np.savez_compressed(fout, **data_out)
 
-        print("Synthesized {} frames.".format(len(data_out["imu_acc"])))
+        self.logger.info("Synthesized {} frames.".format(len(data_out["imu_acc"])))
         return True
 
     # Get orientation and acceleration from list of 4x4 matrices and vertices

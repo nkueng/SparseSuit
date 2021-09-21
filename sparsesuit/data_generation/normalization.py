@@ -3,6 +3,7 @@ zero mean & unit variance.
 Input: pickle or npz files with N IMU orientations and accelerations as well as SMPL poses
 for 24 joints
 Output: normalized zero-mean unit-variance input and target vectors of N-1 IMUs ready for learning """
+import logging
 import os
 import pickle as pkl
 import shutil
@@ -80,6 +81,13 @@ class Normalizer:
         self.sens_names = sens_names
         self.sensor_ids = sensor_ids
 
+        # logger setup
+        log_level = logging.DEBUG if cfg.debug else logging.INFO
+        self.logger = utils.configure_logger(
+            name="normalization", log_path=self.trgt_dir, level=log_level
+        )
+        self.logger.info("\n\nNormalization\n*******************\n")
+
     def normalize_dataset(self):
         assert os.path.exists(
             self.src_dir
@@ -150,7 +158,9 @@ class Normalizer:
                         poses = np.array(data_in["poses"])
                         pose2rot = False
                     except KeyError:
-                        print("Input data does not have the right fields. Skipping!")
+                        self.logger.info(
+                            "Input data does not have the right fields. Skipping!"
+                        )
                         continue
                 seq_length = len(accs)
 
@@ -166,8 +176,12 @@ class Normalizer:
                 out_filename = os.path.join(norm_dir_name, motion_type_i)
 
                 # exit if normalized asset already exists -> makes no sense as we need stats from all assets
-                # if Path(out_filename + '.npz').exists():
-                #     print('Skipping normalization of {}/{} as it already exists.'.format(subject_i, motion_type_i))
+                # if Path(out_filename + ".npz").exists():
+                #     self.logger.info(
+                #         "Skipping normalization of {}/{} as it already exists.".format(
+                #             subject_i, motion_type_i
+                #         )
+                #     )
                 #     continue
 
                 # remove all frames with NANs
@@ -263,7 +277,7 @@ class Normalizer:
                     stats_acc.add(accs_vec[idx])
                     stats_pose.add(poses_vec_sel[idx])
 
-                print("Normalized {}/{}".format(subject_i, motion_type_i))
+                self.logger.info("Normalized {}/{}".format(subject_i, motion_type_i))
 
                 if self.visualize:
                     from sparsesuit.utils import visualization
@@ -445,7 +459,7 @@ class Normalizer:
 
                     seq_count[0] += 1
 
-                print("Processed {}/{}".format(subject_i, motion_type_i))
+                self.logger.info("Processed {}/{}".format(subject_i, motion_type_i))
 
         # save stats with dataset
         stats_dict = {
@@ -473,7 +487,7 @@ class Normalizer:
 
         # convert dataset directories to .tar and delete directories
         if self.tar:
-            print("Converting to .tar...")
+            self.logger.info("Converting to .tar...")
             for dataset in self.dataset_names:
                 ds_path = os.path.join(self.trgt_dir, dataset)
                 with tarfile.open(ds_path + ".tar", "w") as tar:
