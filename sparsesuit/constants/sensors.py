@@ -188,6 +188,29 @@ TP_ANG_EVAL_JOINTS = SMPL_DIP_JOINTS
 POS_EVAL_JOINTS = SMPL_SSP_JOINTS  # TODO: this should include hands and feet
 ANG_EVAL_JOINTS = SMPL_SSP_JOINTS
 
+# mapping from the sensor names in SREC to our convention
+SREC_2_SSP = {
+    "left_hip": "left_pelvis",
+    "left_thigh": "left_hip",
+    "left_calf": "left_knee",
+    "left_foot": "left_ankle",
+    "head": "neck",
+    "right_hip": "right_pelvis",
+    "right_thigh": "right_hip",
+    "right_calf": "right_knee",
+    "right_foot": "right_ankle",
+    "left_back": "left_back",
+    "left_shoulder": "left_collar",
+    "left_arm": "left_shoulder",
+    "left_forearm": "left_elbow",
+    "left_hand": "left_wrist",
+    "right_back": "right_back",
+    "right_shoulder": "right_collar",
+    "right_arm": "right_shoulder",
+    "right_forearm": "right_elbow",
+    "right_hand": "right_wrist",
+}
+
 # mocap markers used for illustrative purposes
 MOCAP_MARKERS = [
     5892,
