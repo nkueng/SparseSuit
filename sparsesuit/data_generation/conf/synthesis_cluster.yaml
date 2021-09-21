@@ -11,7 +11,7 @@ visualize: False
 debug: False
 skip_existing: True
 gpu: True
-gpu_chunks: 750
+gpu_chunks: 500
 cpu_chunks: 3000
 
 defaults:
