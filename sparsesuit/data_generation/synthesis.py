@@ -31,7 +31,7 @@ class Synthesizer:
         self.skip_existing = False if cfg.debug else cfg.skip_existing
 
         # set internal params depending on config params
-        self.src_dir = os.path.join(paths.DATA_PATH, paths.AMASS_PATH)
+        self.src_dir = paths.AMASS_PATH
 
         if self.debug:
             self.src_dir += "_debug"
@@ -53,7 +53,7 @@ class Synthesizer:
         if self.add_noise:
             target_name += "_noisy"
 
-        self.trgt_dir = os.path.join(paths.DATA_PATH, target_name)
+        self.trgt_dir = target_name
         self.joint_ids = [sensors.SENS_JOINTS_IDS[sensor] for sensor in self.sens_names]
 
         # logger setup

@@ -19,7 +19,7 @@ def load_smplx_genders(
     models = {}
     for gender in genders:
         models[gender] = smplx.create(
-            model_path=os.path.join(paths.DATA_PATH, paths.SMPL_PATH),
+            model_path=paths.SMPL_PATH,
             model_type=model_type,
             gender=gender,
         ).to(device)
@@ -32,7 +32,7 @@ def load_smplx(
     device=torch.device("cpu"),
 ):
     return smplx.create(
-        model_path=os.path.join(paths.DATA_PATH, paths.SMPL_PATH),
+        model_path=paths.SMPL_PATH,
         model_type=model_type,
         gender=gender,
     ).to(device)

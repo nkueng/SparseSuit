@@ -76,7 +76,7 @@ class Normalizer:
             if cfg.dataset.noise:
                 src_folder += "_noisy"
 
-        self.src_dir = os.path.join(paths.DATA_PATH, src_folder)
+        self.src_dir = src_folder
         self.norm_dir = self.src_dir + "_n"
         self.trgt_dir = self.src_dir + "_nn"
         self.dataset_names = ["training", "validation", "test"]
@@ -204,11 +204,11 @@ class Normalizer:
                     # get root sensor orientations
                     root_oris = np.reshape(oris_sorted[:, self.root_indx], [-1, 9])
                     # transform to angle-axis
-                    hip_aas = np.reshape(
+                    root_aas = np.reshape(
                         utils.rot_matrix_to_aa(root_oris), [new_seq_length, 2, 3]
                     )
                     # compute mean
-                    root_aa = np.mean(hip_aas, axis=1)
+                    root_aa = np.mean(root_aas, axis=1)
                     # transform back to rotation matrix
                     root_ori = np.reshape(
                         utils.aa_to_rot_matrix(root_aa), [-1, 1, 3, 3]

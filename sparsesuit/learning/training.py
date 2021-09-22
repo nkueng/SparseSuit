@@ -68,9 +68,7 @@ class Trainer:
         for k, v in hyperparams_diff.items():
             self.experiment_name += "-" + k + str(v)
 
-        self.model_path = os.path.join(
-            utils.get_project_folder(), "learning/runs/" + self.experiment_name
-        )
+        self.model_path = os.path.join(paths.RUN_PATH, self.experiment_name)
         self.writer = SummaryWriter(self.model_path)
 
         # logger setup
@@ -83,37 +81,36 @@ class Trainer:
         self.logger.info(OmegaConf.to_yaml(cfg))
 
         # get dataset required by configuration
-        ds_folder = paths.AMASS_PATH
+        ds_dir = paths.AMASS_PATH
         if cfg.debug:
-            ds_folder += "_debug"
+            ds_dir += "_debug"
             self.epochs = 2
             self.train_eval_step = 10
 
         if train_config.dataset == "synthetic":
 
             if train_config.config == "SSP":
-                ds_folder += "_SSP"
+                ds_dir += "_SSP"
 
             elif train_config.config == "MVN":
-                ds_folder += "_MVN"
+                ds_dir += "_MVN"
 
             else:
                 raise NameError("Invalid configuration. Aborting!")
 
             if train_config.noise:
-                ds_folder += "_noisy"
-            ds_folder += "_nn"
+                ds_dir += "_noisy"
+            ds_dir += "_nn"
 
         elif train_config.dataset == "real":
 
             if train_config.config == "MVN":
-                ds_folder = paths.DIP_17_NN_PATH
+                ds_dir = paths.DIP_17_NN_PATH
 
             else:
                 raise NameError("Invalid configuration. Aborting!")
 
         # get training and validation dataset paths
-        ds_dir = os.path.join(paths.DATA_PATH, ds_folder)
         self.train_ds_path = os.path.join(ds_dir, "training")
         self.valid_ds_path = os.path.join(ds_dir, "validation")
 

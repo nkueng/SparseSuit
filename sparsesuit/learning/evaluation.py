@@ -61,9 +61,7 @@ class Evaluator:
         self.future_frames = self.eval_config.future_frames
 
         # load training configuration of experiment
-        self.exp_path = os.path.join(
-            utils.get_project_folder(), "learning/runs/", self.eval_config.experiment
-        )
+        self.exp_path = os.path.join(paths.RUN_PATH, self.eval_config.experiment)
         self.train_config = utils.load_config(self.exp_path)
 
         # cuda setup
@@ -103,34 +101,33 @@ class Evaluator:
         # load appropriate dataset for evaluation
         self.suit_config = self.train_config.experiment.config
         if self.eval_config.dataset == "synthetic":
-            ds_folder = paths.AMASS_PATH
+            ds_dir = paths.AMASS_PATH
 
             if cfg.debug:
-                ds_folder += "_debug"
+                ds_dir += "_debug"
 
             if self.suit_config == "SSP":
-                ds_folder += "_SSP"
+                ds_dir += "_SSP"
 
             elif self.suit_config == "MVN":
-                ds_folder += "_MVN"
+                ds_dir += "_MVN"
 
             else:
                 raise NameError("Invalid configuration. Aborting!")
 
             if self.eval_config.noise:
-                ds_folder += "_noisy"
-            ds_folder += "_nn"
+                ds_dir += "_noisy"
+            ds_dir += "_nn"
 
         elif self.eval_config.dataset == "real":
 
             if self.suit_config == "MVN":
-                ds_folder = paths.DIP_17_NN_PATH
+                ds_dir = paths.DIP_17_NN_PATH
 
             else:
                 raise NameError("Invalid configuration. Aborting!")
 
         # get test dataset paths
-        ds_dir = os.path.join(paths.DATA_PATH, ds_folder)
         test_ds_path = os.path.join(ds_dir, "test")
 
         test_ds_config = utils.load_config(ds_dir).dataset

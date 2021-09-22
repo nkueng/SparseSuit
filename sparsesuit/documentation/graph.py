@@ -2,9 +2,10 @@
 import os
 
 from sparsesuit.utils import utils
+from sparsesuit.constants import paths
 
 scores = {}
-run_dir = os.path.join(utils.get_project_folder(), "learning/runs")
+run_dir = paths.RUN_PATH
 for root, dirs, files in os.walk(run_dir):
     if not files:
         continue

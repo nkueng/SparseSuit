@@ -38,7 +38,7 @@ def render_from_config(cfg: DictConfig):
         # load pose data from one of the datasets
         if cfg.source == "AMASS":
             # load motion asset in standard form
-            src_dir = os.path.join(paths.DATA_PATH, "Synthetic/AMASS")
+            src_dir = paths.AMASS_PATH
             filelist = []
             for root, dirs, files in os.walk(src_dir):
                 for file in files:
@@ -53,7 +53,7 @@ def render_from_config(cfg: DictConfig):
             poses_padded[:, :3] = 0
         elif cfg.source == "AMASS_SSP_nn":
             # load motion asset in normalized form
-            src_dir = os.path.join(paths.DATA_PATH, "Synthetic/AMASS_SSP_nn")
+            src_dir = os.path.join(paths.AMASS_PATH, "_SSP_nn")
             filelist = []
             for root, dirs, files in os.walk(os.path.join(src_dir, "test")):
                 for file in files:
@@ -80,9 +80,7 @@ def render_from_config(cfg: DictConfig):
                 sens = {}
                 for model in cfg.models:
                     # load model predictions
-                    model_path = os.path.join(
-                        utils.get_project_folder(), "learning/runs", model
-                    )
+                    model_path = os.path.join(paths.RUN_PATH, model)
                     with np.load(os.path.join(model_path, "predictions.npz")) as data:
                         data_in = dict(data)
                     predictions[model] = list(data_in.values())
@@ -359,19 +357,18 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None):
                 if "/" in filename:
                     filename = filename.split("/")[1]
                 filename = os.path.join(
-                    paths.DATA_PATH,
                     paths.DOC_PATH,
                     "images",
                     cfg.name,
                     str(idx_i) + "_" + filename + ".png",
                 )
+                print(filename)
                 im_arr = np.expand_dims(body_image, axis=(0, 1, 2))
                 vis_tools.imagearray2file(im_arr, filename)
 
     if cfg.make_gif:
-        filename = os.path.join(
-            paths.DATA_PATH, paths.DOC_PATH, "gifs", cfg.name + ".gif"
-        )
+        filename = os.path.join(paths.DOC_PATH, "gifs", cfg.name + ".gif")
+        print(filename)
         im_arr = np.stack(images)
         im_arr = np.expand_dims(im_arr, axis=(0, 1))
         vis_tools.imagearray2file(im_arr, filename, fps=cfg.gif_fps)
