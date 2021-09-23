@@ -4,8 +4,30 @@ Converts directories of IMU sensor data (SREC) and corresponding poses (FBX) to 
 import os
 import numpy as np
 import SrecReader
+import torch
 from scipy.spatial.transform import Rotation as R
-from sparsesuit.constants.sensors import SENS_NAMES_SSP, SREC_2_SSP
+from bvh import Bvh
+
+from sparsesuit.constants import paths
+from sparsesuit.constants.sensors import (
+    SENS_NAMES_SSP,
+    SREC_2_SSP,
+    SENS_VERTS_SSP,
+    SENS_JOINTS_IDS,
+)
+from sparsesuit.utils import smpl_helpers
+
+
+def get_bvh(file):
+    with open(file) as f:
+        bvh = Bvh(f.read())
+    return bvh
+
+
+def parse_bvh(files):
+    for file in files:
+        bvh = get_bvh(file)
+    return poses
 
 
 def get_srec(file):
@@ -25,6 +47,9 @@ def parse_srec(files):
     sensor_names = [SREC_2_SSP[rec.setSensorName(add)] for add in sensor_add]
     sort_ids = [sensor_names.index(sensor) for sensor in SENS_NAMES_SSP]
 
+    # get expected orientation of sensors in straight pose
+    calib_oris = smpl_helpers.get_straight_pose_oris()
+
     # parse all files
     accs = []
     oris = []
@@ -34,45 +59,102 @@ def parse_srec(files):
         if rec.num_suits != 1:
             continue
         frames = rec.suits[0].frames
-
+        acc_f = []
+        ori_f = []
+        ori_offsets = []
         for frame in frames:
             # convert acceleration from g to m/s²
-            acc_local = np.array(frame.acceleration)[sort_ids] * 9.81
-            acc_local = np.expand_dims(acc_local, axis=2)
+            acc_local_np = np.array(frame.acceleration)[sort_ids] * 9.81
+            acc_local = np.expand_dims(acc_local_np, axis=2)
 
             # convert orientations from quaternion to rotation matrix format
-            ori = R.from_quat(np.array(frame.quaternion)[sort_ids]).as_matrix()
+            quats = np.array(frame.quaternion)[sort_ids]
+            ori_ned = R.from_quat(quats[:, [1, 2, 3, 0]])
+
+            # convert NED to XYZ (180 deg rotation around N-axis)
+            rot = R.from_rotvec([np.pi, 0, 0])
+            ori_xyz = rot * ori_ned
+            # rot = R.from_rotvec([0, 0, np.pi / 2])
+            # ori_xyz = rot * ori_ned
+            ori = ori_xyz.as_matrix()
 
             # transform acceleration to global frame
-            acc_global = np.einsum("abc,abd->abd", ori, acc_local).squeeze()
+            acc_global = []
+            for ori_i, acc_i in zip(ori, acc_local):
+                acc_i_glob = ori_i @ acc_i
+                # subtract gravity
+                acc_i_glob[2] -= 9.81
+                acc_global.append(acc_i_glob)
 
-            oris.append(ori)
-            accs.append(acc_global)
+            acc_global = np.stack(acc_global).squeeze()
 
-    return oris, accs
+            # calibration step: Get offset from straight pose orientations of sensors and normalize by that orientation
+            if len(ori_offsets) == 0:
+                for i, ori_i in enumerate(ori):
+                    calib_ori_i = calib_oris[SENS_JOINTS_IDS[SENS_NAMES_SSP[i]]]
+                    ori_offsets.append(calib_ori_i @ ori_i.T)
+                ori_offsets = np.stack(ori_offsets)
+
+            ori_norm = np.einsum("ijk,ikl->ijl", ori_offsets, ori)
+
+            ori_f.append(ori_norm)
+            acc_f.append(acc_global)
+
+        if VISUALIZE:
+            vis_oris_accs(ori_f, acc_f)
+
+        oris.append(ori_f)
+        accs.append(acc_f)
+
+    return np.stack(oris), np.stack(accs)
+
+
+def vis_oris_accs(oris, accs):
+    from sparsesuit.utils import visualization, smpl_helpers, utils
+
+    play_frames = 1
+
+    smpl_model = smpl_helpers.load_smplx()
+    pose = smpl_helpers.generate_straight_pose()
+    pose[:, :3] = torch.ones(3) * 0.5773502691896258 * 2.0943951023931957
+    body_mesh, joints, rel_tfs = smpl_helpers.my_lbs(smpl_model, pose)
+    verts = np.tile(utils.copy2cpu(body_mesh), [play_frames, 1, 1])
+    joints = np.tile(utils.copy2cpu(joints[:, :22]), [play_frames, 1, 1])
+    poses = np.tile(utils.copy2cpu(rel_tfs[:, :22, :3, :3]), [play_frames, 1, 1, 1])
+    visualization.vis_smpl(
+        faces=smpl_model.faces,
+        vertices=[verts],
+        play_frames=play_frames,
+        playback_speed=0.1,
+        sensors=[verts[:, list(SENS_VERTS_SSP.values())]],
+        oris=[oris],
+        accs=[accs],
+        joints=[joints],
+        pose=[poses],
+    )
 
 
 if __name__ == "__main__":
+    VISUALIZE = False
 
     # set src directory with files
-    src_dir = "/media/nic/ExtremeSSD/real_dataset/SSP_data"
+    src_dir = os.path.join(paths.DATA_PATH, "raw_SSP_dataset/SSP_data")
 
     # walk over all files in directory and collect relevant paths
     srec_files = []
-    fbx_files = []
+    bvh_files = []
     for root, dirs, files in os.walk(src_dir):
         for file in files:
             if file.endswith(".srec"):
                 srec_files.append(os.path.join(root, file))
 
-            if file.endswith(".fbx"):
-                fbx_files.append(os.path.join(root, file))
+            if file.endswith(".bvh"):
+                bvh_files.append(os.path.join(root, file))
 
-    # parse SREC
-    imu_data = parse_srec(srec_files)
+    # parse SREC and extract IMU data in correct frame
+    # oris, accs = parse_srec(srec_files)
 
-    # clean IMU data
-
-    # parse FBX
+    # parse BVH and extract poses in correct frame
+    poses = parse_bvh(bvh_files)
 
     # clean pose data

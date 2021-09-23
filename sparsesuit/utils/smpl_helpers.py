@@ -285,3 +285,50 @@ def generate_relaxed_pose():
     pose[joint_ind["left_elbow"]] = -aa
 
     return torch.Tensor(pose.reshape([1, -1]))
+
+
+def generate_straight_pose():
+    """
+    Generates the SMPL-X joint orientations for the straight pose used in calibration.
+    :return: torch.Tensor
+    """
+    joint_ind = sensors.SMPL_JOINT_IDS
+    pose = np.zeros([sensors.NUM_SMPLX_JOINTS, 3])
+
+    # collar rotation
+    rot = utils.rot_mat(20, "z")
+    aa = utils.rot_matrix_to_aa(rot.reshape([1, -1])).reshape([3])
+
+    pose[joint_ind["right_collar"]] = aa
+    pose[joint_ind["left_collar"]] = -aa
+
+    # shoulder rotation
+    rot_right = utils.rot_mat(60, "z") @ utils.rot_mat(10, "y")
+    aa_right = utils.rot_matrix_to_aa(rot_right.reshape([1, -1])).reshape([3])
+
+    rot_left = utils.rot_mat(-60, "z") @ utils.rot_mat(-10, "y")
+    aa_left = utils.rot_matrix_to_aa(rot_left.reshape([1, -1])).reshape([3])
+
+    pose[joint_ind["right_shoulder"]] = aa_right
+    pose[joint_ind["left_shoulder"]] = aa_left
+
+    return torch.Tensor(pose.reshape([1, -1]))
+
+
+def get_straight_pose_oris():
+    smpl_model = load_smplx()
+    pose = generate_straight_pose()
+    pose[:, :3] = torch.ones(3) * 0.5773502691896258 * 2.0943951023931957
+    body_mesh, joints, rel_tfs = my_lbs(smpl_model, pose)
+    return utils.copy2cpu(rel_tfs[:, : sensors.NUM_SMPL_JOINTS, :3, :3]).squeeze()
+
+
+def generate_initial_pose():
+    """
+    Generates the SMPL-X joint orientations for the initial pose with the arms stretched out.
+    :return: torch.Tensor
+    """
+    joint_ind = sensors.SMPL_JOINT_IDS
+    pose = np.zeros([sensors.NUM_SMPLX_JOINTS, 3])
+
+    return torch.Tensor(pose.reshape([1, -1]))

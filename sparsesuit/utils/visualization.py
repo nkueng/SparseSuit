@@ -18,6 +18,7 @@ def vis_smpl(
     export: bool = False,
     add_captions: bool = False,
     side_by_side: bool = False,
+    pose: list = None,
 ):
     """Displays play_frames number of frames of the given vertices with the given SMPL model."""
     # constants
@@ -67,10 +68,18 @@ def vis_smpl(
         # joints of SMPL model
         if joints is not None:
             for j, joint in enumerate(joints):
-                sm = creation.uv_sphere(radius=0.005)
-                sm.visual.vertex_colors = [0.9, 0.1, 0.1, 1.0]
+                if pose is not None:
+                    # visualize joints as axes with pose orientation
+                    sm = creation.axis(
+                        origin_size=0.005, axis_radius=0.003, axis_length=0.03
+                    )
+                else:
+                    sm = creation.uv_sphere(radius=0.005)
+                    sm.visual.vertex_colors = [0.9, 0.1, 0.1, 1.0]
                 tfs = np.tile(np.eye(4), (joint.shape[1], 1, 1))
                 tfs[:, :3, 3] = joint[i]
+                if pose is not None:
+                    tfs[:, :3, :3] = pose[j][i]
                 joint_pcl = pyrender.Mesh.from_trimesh(sm, poses=tfs, smooth=False)
                 nodes.append(pyrender.Node(mesh=joint_pcl, translation=transl[j]))
 
@@ -166,5 +175,8 @@ def vis_smpl(
         old_nodes = nodes_buffer[i]
 
         time.sleep(1 / fps)
+
+    if play_frames == 1:
+        input("hit enter")
 
     v.close_external()
