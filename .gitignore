@@ -1,4 +1,6 @@
 # project specific
+ext/
+.submitit
 runs/
 *.png
 *.gif
