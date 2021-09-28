@@ -1,6 +1,6 @@
 # SMPL-X vertices of virtual sensors for MVN -> ordering sets convention
 SENS_VERTS_MVN = {
-    "neck": 8942,
+    "head": 8942,
     "pelvis": 5493,
     "sternum": 5528,
     "left_collar": 5462,
@@ -28,7 +28,7 @@ SENS_VERTS_SSP = {
     "right_back": 6142,
     "left_collar": 5462,
     "right_collar": 8196,
-    "neck": 8980,
+    "head": 8980,
     "left_shoulder": 3952,
     "right_shoulder": 6700,
     "left_elbow": 4858,
@@ -105,7 +105,7 @@ SENS_NAMES_DIP = [
     "right_elbow",
     "left_knee",
     "right_knee",
-    "neck",
+    "head",
     "pelvis",
 ]
 SENS_NAMES_MVN = list(SENS_VERTS_MVN.keys())
@@ -177,7 +177,7 @@ SMPL_PARENTS = [
 SIP_ANG_EVAL_JOINTS = [1, 2, 16, 17]
 
 # "virtual markers" to evaluate joint positional error in SIP and DIP:
-# hips, knees, ankles, shoulders, elbows, wrists and neck
+# hips, knees, ankles, shoulders, elbows, wrists and head
 SIP_POS_EVAL_JOINTS = [1, 2, 4, 5, 7, 8, 12, 16, 17, 18, 19, 20, 21]
 
 # the joints used for evaluation in TransPose: all DIP prediction joints
@@ -194,7 +194,7 @@ SREC_2_SSP = {
     "left_thigh": "left_hip",
     "left_calf": "left_knee",
     "left_foot": "left_ankle",
-    "head": "neck",
+    "head": "head",
     "right_hip": "right_pelvis",
     "right_thigh": "right_hip",
     "right_calf": "right_knee",
@@ -209,6 +209,30 @@ SREC_2_SSP = {
     "right_arm": "right_shoulder",
     "right_forearm": "right_elbow",
     "right_hand": "right_wrist",
+}
+
+FBX2SMPL = {
+    'Hips': "pelvis",
+    "LeftThigh": "left_hip",
+    "LeftShin": "left_knee",
+    "LeftFoot": "left_ankle",
+    "RightThigh": "right_hip",
+    "RightShin": "right_knee",
+    "RightFoot": "right_ankle",
+    'Spine1': "spine1",
+    'Spine2': "spine2",
+    'Spine3': "spine2",  # overwrites Spine2
+    'Spine4': "spine3",
+    'LeftShoulder': "left_collar",
+    'LeftArm': "left_shoulder",
+    'LeftForeArm': "left_elbow",
+    'LeftHand': "left_wrist",
+    'Neck': "neck",
+    'Head': "head",
+    'RightShoulder': "right_collar",
+    'RightArm': "right_shoulder",
+    'RightForeArm': "right_elbow",
+    'RightHand': "right_wrist",
 }
 
 # mocap markers used for illustrative purposes

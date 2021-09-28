@@ -2,7 +2,7 @@ name: back_none
 config: SSP
 count: 15
 sensors:
-  - neck
+  - head
   - left_shoulder
   - right_shoulder
   - left_elbow

@@ -2,7 +2,7 @@ name: 13_a
 config: SSP
 count: 13
 sensors:
-  - neck
+  - head
   - left_collar
   - right_collar
   - left_shoulder

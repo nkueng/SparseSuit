@@ -4,7 +4,7 @@ count: 17
 sensors:
   - left_collar
   - right_collar
-  - neck
+  - head
   - left_shoulder
   - right_shoulder
   - left_elbow

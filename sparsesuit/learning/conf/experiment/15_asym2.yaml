@@ -7,7 +7,7 @@ sensors:
   - right_back
   - left_collar
   - right_collar
-  - neck
+  - head
   - right_shoulder
   - left_elbow
   - left_wrist

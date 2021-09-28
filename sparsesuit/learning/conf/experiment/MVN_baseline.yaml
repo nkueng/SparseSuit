@@ -2,7 +2,7 @@ name: MVN_baseline
 config: MVN
 count: 17
 sensors:
- - neck
+ - head
  - sternum
  - left_wrist
  - right_wrist

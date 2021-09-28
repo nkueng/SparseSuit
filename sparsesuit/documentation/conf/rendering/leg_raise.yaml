@@ -10,7 +10,7 @@ sensors:
   - left_knee
   - right_elbow
   - left_elbow
-  - neck
+  - head
 render_every_n_frame: 1
 show_rendering: False
 orthographic_camera: True

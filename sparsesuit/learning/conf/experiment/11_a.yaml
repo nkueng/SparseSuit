@@ -2,7 +2,7 @@ name: 11_a
 config: SSP
 count: 11
 sensors:
-  - neck
+  - head
   - left_shoulder
   - right_shoulder
   - left_wrist
