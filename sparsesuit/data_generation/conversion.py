@@ -6,6 +6,8 @@ import numpy as np
 import SrecReader
 import torch
 from scipy.spatial.transform import Rotation as R
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 from bvh import Bvh
 
 from sparsesuit.constants import paths
@@ -126,16 +128,17 @@ def vis_oris_accs(oris, accs):
         vertices=[verts],
         play_frames=play_frames,
         playback_speed=0.1,
-        sensors=[verts[:, list(SENS_VERTS_SSP.values())]],
-        oris=[oris],
-        accs=[accs],
+        # sensors=[verts[:, list(SENS_VERTS_SSP.values())]],
+        # oris=[oris],
+        # accs=[accs],
         joints=[joints],
         pose=[poses],
     )
 
 
 if __name__ == "__main__":
-    VISUALIZE = False
+    VISUALIZE = True
+    PLOT = True
 
     # set src directory with files
     src_dir = os.path.join(paths.DATA_PATH, "raw_SSP_dataset/SSP_data")
@@ -153,8 +156,22 @@ if __name__ == "__main__":
 
     # parse SREC and extract IMU data in correct frame
     # oris, accs = parse_srec(srec_files)
+    oris, accs = parse_srec([srec_files[0]])
+
+    # plot some IMU data
+    first_frame = 200
+    last_frame = 300
+    frame_range = range(first_frame, last_frame)
+    y = accs[0, frame_range, 0]
+    x = np.linspace(0, len(y), len(y))
+    fig, ax = plt.subplots()
+    ax.plot(x, y)
+    ax.set_title("Real Acceleration Signals")
+    plt.xlabel("Frame Number")
+    plt.ylabel("Acceleration [m/s²]")
+    fig.show()
 
     # parse BVH and extract poses in correct frame
-    poses = parse_bvh(bvh_files)
+    # poses = parse_bvh(bvh_files)
 
     # clean pose data
