@@ -4,10 +4,11 @@ defaults:
 name: eval_gt_overlay
 source: AMASS_SSP_nn
 models:
-  - 2108230722-baseline-SSP19
-  - 2108251334-15_sym_out
-  - 2108251900-11_a
   - 2108251857-minimal_inner
+  - 2108251900-11_a
+  - 2109270927-13_a
+  - 2108251334-15_sym_out
+  - 2108230722-baseline-SSP19
 assets:
 # [asset_idx, frame_idx]
   - [1, 200]  # throwing

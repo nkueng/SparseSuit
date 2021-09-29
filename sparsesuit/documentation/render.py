@@ -53,7 +53,7 @@ def render_from_config(cfg: DictConfig):
             poses_padded[:, :3] = 0
         elif cfg.source == "AMASS_SSP_nn":
             # load motion asset in normalized form
-            src_dir = os.path.join(paths.AMASS_PATH, "_SSP_nn")
+            src_dir = paths.AMASS_PATH + "_SSP_nn"
             filelist = []
             for root, dirs, files in os.walk(os.path.join(src_dir, "test")):
                 for file in files:
