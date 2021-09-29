@@ -10,6 +10,7 @@ asset_idx: 2
 frame_idx: -1
 show_rendering: True
 make_gif: False
+render_frames: 1
 gif_fps: 15
 show_from_behind: False
 show_sideways: False

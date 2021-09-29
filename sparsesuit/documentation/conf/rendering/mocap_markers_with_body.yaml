@@ -3,6 +3,7 @@ defaults:
 
 name: mocap_markers_with_body
 frame_idx: 4050
+source: AMASS
 show_joints: False
 show_skeleton: False
 show_markers: True

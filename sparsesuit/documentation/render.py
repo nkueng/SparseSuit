@@ -96,7 +96,8 @@ def render_from_config(cfg: DictConfig):
 
         if cfg.frame_idx != -1:
             assert cfg.frame_idx <= len(poses_padded), "invalid frame index, aborting!"
-            poses_padded = poses_padded[[cfg.frame_idx]]
+            last_frame = cfg.frame_idx + cfg.render_frames
+            poses_padded = poses_padded[cfg.frame_idx : last_frame]
 
     if cfg.make_gif:
         # render every frame for smooth gifs

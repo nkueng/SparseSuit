@@ -15,4 +15,6 @@ acc_delta: 4
 show_rendering: False
 orthographic_camera: True
 camera_translation: [0, 0.5, 1.75]
-make_gif: False
+make_gif: True
+frame_idx: 100
+render_frames: 100
