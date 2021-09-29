@@ -20,4 +20,3 @@ sensors:
  - right_ankle
 dataset: synthetic
 noise: False
-

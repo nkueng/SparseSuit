@@ -111,7 +111,7 @@ SENS_NAMES_DIP = [
 SENS_NAMES_MVN = list(SENS_VERTS_MVN.keys())
 SENS_NAMES_SSP = list(SENS_VERTS_SSP.keys())
 
-# indices of 15 SMPL joints used as targets for predictions in DIP (excludes pelvis, ankles, feet, wrists, and hands)
+# indices of 15 SMPL joints used as targets for predictions in DIP (excludes pelvis, ankles, wrists, feet, and hands)
 SMPL_DIP_JOINTS = [1, 2, 3, 4, 5, 6, 9, 12, 13, 14, 15, 16, 17, 18, 19]
 
 # indices of 19 SMPL joints used as targets for predictions in this project (excludes pelvis, feet, and hands)
