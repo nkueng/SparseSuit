@@ -1,4 +1,4 @@
-name: baseline
+name: SSP_baseline
 config: SSP
 count: 19
 sensors:
