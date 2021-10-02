@@ -59,6 +59,7 @@ class Evaluator:
         self.visualize = cfg.visualize
         self.past_frames = self.eval_config.past_frames
         self.future_frames = self.eval_config.future_frames
+        self.eval_pos_err = self.eval_config.pos_err
 
         # load training configuration of experiment
         self.exp_path = os.path.join(paths.RUN_PATH, self.eval_config.experiment)
@@ -158,6 +159,7 @@ class Evaluator:
         stats_ang_err = Welford()
         stats_loss = Welford()
         stats_jerk = Welford()
+        stats_ang_per_asset = {}
 
         # container to store predicted poses
         predicted_poses = {}
@@ -167,6 +169,9 @@ class Evaluator:
             for batch_num, (ori, acc, pose_trgt_norm, filename) in enumerate(
                 self.test_dl
             ):
+                # get ang err statistics for this asset
+                stats_ang_err_asset = Welford()
+
                 self.logger.info(
                     "computing metrics on asset {} with {} frames".format(
                         batch_num, ori.shape[1]
@@ -231,20 +236,29 @@ class Evaluator:
                     targ_k = [
                         pose_trgt_full[0][k * max_chunk_size : (k + 1) * max_chunk_size]
                     ]
-                    ang_err, pos_err, jerk = self.compute_metrics(pred_k, targ_k)
+                    ang_err, pos_err, jerk = self.compute_metrics(
+                        pred_k, targ_k, self.eval_pos_err
+                    )
 
                     # add errors to stats
-                    for ang_err_i, pos_err_i in zip(ang_err, pos_err):
+                    for ang_err_i, pos_err_i, jerk_i in zip(ang_err, pos_err, jerk):
                         stats_ang_err.add(ang_err_i)
                         stats_pos_err.add(pos_err_i)
-
-                    for jerk_i in jerk:
                         stats_jerk.add(jerk_i)
+                        stats_ang_err_asset.add(ang_err_i)
+
+                # keep track of angular errors per joint and per asset
+                stats_ang_per_asset[filename[0]] = stats_ang_err_asset.mean
 
         # save predicted poses with model
         poses_filename = os.path.join(self.exp_path, "predictions.npz")
         with open(poses_filename, "wb") as fout:
             np.savez_compressed(fout, **predicted_poses)
+
+        # save per joint and asset ang err stats to local file
+        err_stats_filename = os.path.join(self.exp_path, "error_stats.npz")
+        with open(err_stats_filename, "wb") as fout:
+            np.savez_compressed(fout, **stats_ang_per_asset)
 
         # summarize errors
         metrics = {
