@@ -30,4 +30,6 @@ use_relaxed_pose: False
 render_every_n_frame: 30
 sensors: all
 show_unused_sensors: False
+sensor_config: SSP
+
 
