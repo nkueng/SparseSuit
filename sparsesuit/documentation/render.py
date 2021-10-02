@@ -3,6 +3,7 @@ import random
 
 import hydra
 import numpy as np
+import pickle as pkl
 import torch
 import trimesh
 from body_visualizer.mesh import sphere
@@ -89,6 +90,39 @@ def render_from_config(cfg: DictConfig):
                     sens[model].append("left_pelvis")
                     sens[model].append("right_pelvis")
 
+        elif cfg.source == "DIP_IMU_17":
+            # load real motion assets in MVN configuration
+            src_dir = paths.DIP_17_PATH
+            filelist = []
+            for root, dirs, files in os.walk(src_dir):
+                for file in files:
+                    if file.endswith(".pkl"):
+                        filelist.append(os.path.join(root, file))
+            with open(filelist[cfg.asset_idx], "rb") as fin:
+                data_in = pkl.load(fin, encoding="latin1")
+            # extract poses from motion asset
+            poses_padded = smpl_helpers.extract_from_smplh(
+                data_in["gt"], list(sensors.SMPL_JOINT_IDS.values())
+            )
+
+        elif cfg.source == "DIP_IMU_6_NN":
+            # load real motion assets in DIP configuration
+            src_dir = os.path.join(paths.DIP_6_NN_PATH, "imu_own_training.npz")
+            with np.load(src_dir, allow_pickle=True) as data:
+                data_in = dict(data)
+            # extract poses from motion asset
+            poses = data_in["smpl_pose"][cfg.asset_idx]
+            seq_len = len(poses)
+            poses_padded = np.tile(
+                np.identity(3), [seq_len, sensors.NUM_SMPLX_JOINTS, 1, 1]
+            )
+            poses_padded[:, sensors.SMPL_DIP_JOINTS] = poses.reshape(
+                [seq_len, -1, 3, 3]
+            )
+            poses_padded = torch.Tensor(
+                utils.rot_matrix_to_aa(poses_padded.reshape([seq_len, -1]))
+            )
+
         elif cfg.use_default_pose:
             poses_padded = torch.zeros([1, sensors.NUM_SMPLX_JOINTS * 3])
         else:
@@ -113,18 +147,24 @@ def render_from_config(cfg: DictConfig):
                     last_frame = (
                         frame_idx + cfg.render_every_n_frame * cfg.render_frames
                     )
-                    poses_i = pred_i[asset_idx][0][frame_idx:last_frame]
+                    poses_i = pred_i[asset_idx][0][
+                        frame_idx : last_frame : cfg.render_every_n_frame
+                    ]
                     poses_padded_i = smpl_helpers.extract_from_norm_ds(poses_i)
-                    poses_gt = poses_padded[asset_idx][frame_idx:last_frame]
+                    poses_gt = poses_padded[asset_idx][
+                        frame_idx : last_frame : cfg.render_every_n_frame
+                    ]
                     cfg_i = cfg.copy()
                     cfg_i.name = cfg.name + "/" + str(model) + "/" + str(asset_idx)
                     cfg_i.sensors = sens[model]
                     render_poses(poses_padded_i, smpl_model, cfg_i, poses_gt=poses_gt)
 
-            # render selected frames for groundtruth
+            # render selected frames for ground truth
             for asset_idx, frame_idx in cfg.assets:
                 last_frame = frame_idx + cfg.render_every_n_frame * cfg.render_frames
-                poses_padded_i = poses_padded[asset_idx][frame_idx:last_frame]
+                poses_padded_i = poses_padded[asset_idx][
+                    frame_idx : last_frame : cfg.render_every_n_frame
+                ]
                 cfg_i = cfg.copy()
                 cfg_i.name = cfg.name + "/target/" + str(asset_idx)
                 cfg_i.show_sensors = False
@@ -138,11 +178,28 @@ def render_from_config(cfg: DictConfig):
                 folder_name = cfg.name + "/" + str(i) + "_" + folder_name
                 cfg_i.name = folder_name
                 render_poses(poses_padded_i, smpl_model, cfg_i)
+
+    elif cfg.source == "DIP_IMU_17":
+        # make sure real acc and ori signal are rendered
+        acc = data_in["imu_acc"][cfg.frame_idx : last_frame]
+        ori = data_in["imu_ori"][cfg.frame_idx : last_frame]
+        render_poses(poses_padded, smpl_model, cfg, acc=acc, ori=ori)
+
+    elif cfg.source == "DIP_IMU_6_NN":
+        # make sure real acc and ori signal are rendered
+        seq_len = len(poses_padded)
+        acc = data_in["acceleration"][cfg.asset_idx][
+            cfg.frame_idx : last_frame
+        ].reshape([seq_len, -1, 3])
+        ori = data_in["orientation"][cfg.asset_idx][cfg.frame_idx : last_frame].reshape(
+            [seq_len, -1, 3, 3]
+        )
+        render_poses(poses_padded, smpl_model, cfg, acc=acc, ori=ori)
     else:
         render_poses(poses_padded, smpl_model, cfg)
 
 
-def render_poses(poses_padded, smpl_model, cfg, poses_gt=None):
+def render_poses(poses_padded, smpl_model, cfg, poses_gt=None, acc=None, ori=None):
     # load mesh viewer
     mv = MeshViewer(
         cfg.render_width,
@@ -164,12 +221,10 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None):
 
     # iterate over desired frames in sequence
     seq_len = len(poses_padded)
-    num_iterations = seq_len // cfg.render_every_n_frame
-    for i in range(max(num_iterations, 1)):
-        idx_i = i * cfg.render_every_n_frame
+    for idx_i in range(seq_len):
         print("rendering frame {}".format(idx_i))
         if cfg.show_accelerations and (
-            idx_i < cfg.acc_delta or num_iterations - cfg.acc_delta <= idx_i
+            idx_i < cfg.acc_delta or seq_len - cfg.acc_delta <= idx_i
         ):
             continue
 
@@ -264,10 +319,15 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None):
 
         # sensor meshes
         if cfg.show_sensors or cfg.show_sensor_orientations:
-            chosen_sensors = (
-                sensors.SENS_VERTS_SSP.keys() if cfg.sensors == "all" else cfg.sensors
+            sensor_vertices = (
+                sensors.SENS_VERTS_SSP
+                if cfg.sensor_config == "SSP"
+                else sensors.SENS_VERTS_MVN
             )
-            for sensor, vert_ind in sensors.SENS_VERTS_SSP.items():
+            chosen_sensors = (
+                sensor_vertices.keys() if cfg.sensors == "all" else cfg.sensors
+            )
+            for sensor, vert_ind in sensor_vertices.items():
                 unused = False
                 if sensor not in chosen_sensors:
                     unused = True
@@ -283,6 +343,11 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None):
                 # )
                 tf = np.eye(4)
                 tf[:3, :3] = rel_tfs_i[ori_ind, :3, :3]
+                if ori is not None:
+                    ori_ind = list(sensor_vertices.keys()).index(sensor)
+                    if cfg.name == "dip_imu_6_nn":
+                        ori_ind = cfg.sensors.index(sensor)
+                    tf[:3, :3] = ori[idx_i, ori_ind]
                 # tf[:3, :3] = sensor_orientation.transpose()
                 tf[:3, 3] = vertices_i[vert_ind]
 
@@ -328,10 +393,21 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None):
             meshes.append(vis_markers)
 
         # meshes for acceleration cylinders
-        if cfg.show_accelerations:
-            for i, acc in enumerate(accs):
-                cyl_orig = vert_1[i]
-                cyl_end = cyl_orig + acc / 50
+        if cfg.show_accelerations or acc is not None:
+            if acc is not None:
+                accs = acc[idx_i]
+            if cfg.sensor_config == "SSP":
+                vert_ids = list(sensors.SENS_VERTS_SSP.values())
+            else:
+                vert_ids = list(sensors.SENS_VERTS_MVN.values())
+            if cfg.name == "dip_imu_6_nn":
+                vert_ids = [sensors.SENS_VERTS_MVN[sensor] for sensor in cfg.sensors]
+
+            for i, acc_i in enumerate(accs):
+                if np.any(np.isnan(acc_i)):
+                    continue
+                cyl_orig = vertices_i[vert_ids[i]]
+                cyl_end = cyl_orig + acc_i / 50
                 segment = np.array([cyl_orig, cyl_end])
                 cyl = creation.cylinder(radius=0.005, segment=segment)
                 cyl.visual.vertex_colors = vis_tools.colors["orange"]

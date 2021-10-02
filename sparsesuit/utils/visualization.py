@@ -55,7 +55,7 @@ def vis_smpl(
             vertex_color = (
                 np.ones([num_vertices, 4]) * colors[vertex_colors[v]]
                 if vertex_colors is not None
-                else [0.3, 0.3, 0.3, 0.8]
+                else [0.7, 0.7, 0.7, 0.8]
             )
             tri_mesh = trimesh.Trimesh(vertex[i], faces, vertex_colors=vertex_color)
             mesh = pyrender.Mesh.from_trimesh(tri_mesh, smooth=False)

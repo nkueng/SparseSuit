@@ -96,7 +96,7 @@ class Synthesizer:
                 # if dataset_name == 'ACCAD':
                 #     break
 
-                filename = curr_dir + "_" + file
+                filename = (curr_dir + "_" + file).replace(" ", "")
                 target_dir = os.path.join(self.trgt_dir, dataset_name)
                 target_path = os.path.join(target_dir, filename)
 
@@ -177,10 +177,6 @@ class Synthesizer:
             self.logger.info("Fewer than 300 frames after synthesis. Skipping!")
             return False
 
-        # limit sequences to 11000 frames (empirical)
-        # if frames_after > 11000:
-        #     data_out['gt'] = data_out['gt'][:11000]
-
         # simulate IMU data for given SMPL mesh and poses
         gender = utils.str2gender(str(data_in["gender"]))
         if gender is None:
@@ -250,7 +246,7 @@ class Synthesizer:
             if self.device == torch.device("cuda")
             else self.cfg.cpu_chunks
         )
-        num_chunks = batch_size // max_chunk_size + 1
+        num_chunks = batch_size // (max_chunk_size + 1) + 1
         vertices, joints, rel_tfs = [], [], []
         for k in range(num_chunks):
             # extract chunk of poses
@@ -297,7 +293,7 @@ class Synthesizer:
                 faces=self.smpl_models[gender].faces,
                 # vertices=[np.expand_dims(model.v_template.detach().numpy(), axis=0)],  # vis ori of smpl's v_template
                 vertices=vis_verts,
-                joints=vis_joints,
+                # joints=vis_joints,
                 sensors=vis_sensors,
                 accs=[acceleration],
                 oris=[orientation],

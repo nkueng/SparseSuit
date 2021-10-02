@@ -107,14 +107,14 @@ class Normalizer:
         # determine root sensor depending on sensor config
         if self.sens_config == "SSP":
             # the SSP has no root sensor, so a virtual sensor is derived from the two hip sensors
-            self.root_indx = [
+            root_idx = [
                 self.sens_names.index("left_pelvis"),
                 self.sens_names.index("right_pelvis"),
             ]
             self.sens_names.remove("left_pelvis")
             self.sens_names.remove("right_pelvis")
         elif self.sens_config == "MVN":
-            self.root_indx = self.sens_names.index("pelvis")
+            root_idx = self.sens_names.index("pelvis")
             self.sens_names.remove("pelvis")
         else:
             raise NameError("Invalid sensor configuration. Aborting!")
@@ -166,8 +166,12 @@ class Normalizer:
                         continue
                 seq_length = len(accs)
 
-                # exit if data is empty
+                # skip if data is empty
                 if seq_length == 0:
+                    continue
+
+                # skip if data vectors don't have same length
+                if len(accs) != len(oris) or len(accs) != len(poses):
                     continue
 
                 subject_i = subdir.split(self.src_dir + "/")[1]
@@ -202,7 +206,7 @@ class Normalizer:
                 # normalize orientation and acceleration for each frame w.r.t. root
                 if self.sens_config == "SSP":
                     # get root sensor orientations
-                    root_oris = np.reshape(oris_sorted[:, self.root_indx], [-1, 9])
+                    root_oris = np.reshape(oris_sorted[:, root_idx], [-1, 9])
                     # transform to angle-axis
                     root_aas = np.reshape(
                         utils.rot_matrix_to_aa(root_oris), [new_seq_length, 2, 3]
@@ -217,43 +221,43 @@ class Normalizer:
                     root_ori_inv = np.transpose(root_ori, [0, 1, 3, 2])
 
                     # get hip sensor accelerations
-                    hip_accs = accs_sorted[:, [self.root_indx]]
+                    hip_accs = accs_sorted[:, [root_idx]]
                     # average to get virtual sensor acceleration to normalize other sensors
                     root_acc = np.mean(hip_accs, axis=2)
                 elif self.sens_config == "MVN":
                     root_ori_inv = np.transpose(
-                        oris_sorted[:, [self.root_indx]], [0, 1, 3, 2]
+                        oris_sorted[:, [root_idx]], [0, 1, 3, 2]
                     )
-                    root_acc = accs_sorted[:, [self.root_indx]]
+                    root_acc = accs_sorted[:, [root_idx]]
 
                 # normalize all orientations
                 oris_norm = np.matmul(root_ori_inv, oris_sorted)
                 # discard root orientation which is always identity
-                oris_norm_wo_root = np.delete(oris_norm, self.root_indx, axis=1)
+                oris_norm_wo_root = np.delete(oris_norm, root_idx, axis=1)
                 oris_vec = np.reshape(oris_norm_wo_root, (new_seq_length, -1))
 
                 # normalize all accelerations
                 accs_norm = accs_sorted - root_acc
                 accs_norm = np.matmul(root_ori_inv, accs_norm[..., np.newaxis])
                 # discard root acceleration which is always zero
-                accs_norm_wo_root = np.delete(accs_norm, self.root_indx, axis=1)
+                accs_norm_wo_root = np.delete(accs_norm, root_idx, axis=1)
                 accs_vec = np.reshape(accs_norm_wo_root, (new_seq_length, -1))
 
                 # convert poses to rotation matrix format if necessary
                 poses_vec = poses[nan_mask]
                 if pose2rot:
                     # select target joints
-                    poses_vec_sel = np.reshape(poses_vec, (new_seq_length, -1, 3))[
+                    poses_vec_sel = np.reshape(poses_vec, [new_seq_length, -1, 3])[
                         :, self.pred_trgt_joints
                     ]
                     # convert pose data from angle-axis vectors to rotation matrices
                     poses_vec_torch = torch.from_numpy(
-                        np.reshape(poses_vec_sel, (-1, 3))
+                        np.reshape(poses_vec_sel, [-1, 3])
                     )
                     poses_vec_rot = (
                         lbs.batch_rodrigues(poses_vec_torch).detach().numpy()
                     )
-                    poses_vec_sel = np.reshape(poses_vec_rot, (new_seq_length, -1))
+                    poses_vec_sel = np.reshape(poses_vec_rot, [new_seq_length, -1])
                 else:
                     # poses given in rot matrix format already, only select relevant
                     poses_vec_sel = np.reshape(poses_vec, [new_seq_length, -1, 3, 3])[
@@ -285,7 +289,7 @@ class Normalizer:
                     from sparsesuit.utils import visualization
 
                     frames = 300
-                    frame_range = range(2 * frames, 3 * frames)
+                    frame_range = range(0 * frames, 1 * frames)
                     vis_poses = np.tile(
                         np.eye(3), [frames, sensors.NUM_SMPLX_JOINTS, 1, 1]
                     )
@@ -328,7 +332,7 @@ class Normalizer:
                         accs=accelerations,
                         oris=orientations,
                         play_frames=frames,
-                        playback_speed=0.1,
+                        playback_speed=0.5,
                         add_captions=False,
                     )
 
@@ -487,7 +491,8 @@ class Normalizer:
         self.write_config(seq_count_train[0], seq_count_valid[0], seq_count_test[0])
 
         # delete directory with normalized assets
-        shutil.rmtree(self.norm_dir)
+        if self.config.del_interm:
+            shutil.rmtree(self.norm_dir)
 
         # convert dataset directories to .tar and delete directories
         if self.tar:

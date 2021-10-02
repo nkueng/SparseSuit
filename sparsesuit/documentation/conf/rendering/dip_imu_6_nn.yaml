@@ -1,0 +1,21 @@
+defaults:
+  - dip_imu
+
+name: dip_imu_6_nn
+source: DIP_IMU_6_NN
+sensor_config: MVN
+sensors:
+  - left_elbow
+  - right_elbow
+  - left_knee
+  - right_knee
+  - head
+asset_idx: 73
+show_sideways: False
+show_rendering: False
+orthographic_camera: True
+camera_translation: [0, 0.5, 1.75]
+make_gif: True
+gif_fps: 15
+frame_idx: 0
+render_frames: 300

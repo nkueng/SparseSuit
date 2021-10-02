@@ -1,0 +1,22 @@
+name: MVN_baseline
+config: MVN
+count: 17
+sensors:
+ - head
+ - sternum
+ - left_wrist
+ - right_wrist
+ - left_collar
+ - right_collar
+ - left_shoulder
+ - right_shoulder
+ - left_hip
+ - right_hip
+ - left_knee
+ - right_knee
+ - left_elbow
+ - right_elbow
+ - left_ankle
+ - right_ankle
+dataset: synthetic
+noise: False
