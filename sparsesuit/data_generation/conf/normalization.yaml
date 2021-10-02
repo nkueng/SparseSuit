@@ -1,10 +1,11 @@
 dataset:
-  config: SSP
+  config: MVN
   type: synthetic
-  noise: True
+  noise: False
   tar: False
+  del_interm: False
 visualize: False
-debug: True
+debug: False
 
 hydra:
   run:

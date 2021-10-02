@@ -1,5 +1,5 @@
 dataset:
-  config: SSP
+  config: MVN
   type: synthetic
   acc_delta: 4
   noise: False
