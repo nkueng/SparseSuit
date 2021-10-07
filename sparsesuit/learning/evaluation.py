@@ -16,50 +16,13 @@ from sparsesuit.learning import models
 from sparsesuit.utils import utils, smpl_helpers
 
 
-def joint_angle_error(predicted_pose_params, target_pose_params):
-    """
-    Computes the distance in joint angles in degrees between predicted and target joints for every given frame. Currently,
-    this function can only handle input pose parameters represented as rotation matrices.
-
-    :param predicted_pose_params: An np array of shape `(seq_length, dof)` where `dof` is 216, i.e. a 3-by-3 rotation
-      matrix for each of the 24 joints.
-    :param target_pose_params: An np array of the same shape as `predicted_pose_params` representing the target poses.
-    :return: An np array of shape `(seq_length, 24)` containing the joint angle error in Radians for each joint.
-    """
-    seq_length, dof = predicted_pose_params.shape[0], predicted_pose_params.shape[1]
-    assert dof == 216, "unexpected number of degrees of freedom"
-    assert (
-        target_pose_params.shape[0] == seq_length and target_pose_params.shape[1] == dof
-    ), "target_pose_params must match predicted_pose_params"
-
-    # reshape to have rotation matrices explicit
-    n_joints = dof // 9
-    p1 = np.reshape(predicted_pose_params, [-1, n_joints, 3, 3])
-    p2 = np.reshape(target_pose_params, [-1, n_joints, 3, 3])
-
-    # compute R1 * R2.T, if prediction and target match, this will be the identity matrix
-    r1 = np.reshape(p1, [-1, 3, 3])
-    r2 = np.reshape(p2, [-1, 3, 3])
-    r2t = np.transpose(r2, [0, 2, 1])
-    r = np.matmul(r1, r2t)
-
-    # convert `r` to angle-axis representation and extract the angle, which is our measure of difference between
-    # the predicted and target orientations
-    angles = []
-    for i in range(r1.shape[0]):
-        aa, _ = cv2.Rodrigues(r[i])
-        angles.append(utils.rad2deg(np.linalg.norm(aa)))
-
-    return np.reshape(np.array(angles), [seq_length, n_joints])
-
-
 class Evaluator:
     def __init__(self, cfg):
         self.eval_config = cfg.evaluation
         self.visualize = cfg.visualize
         self.past_frames = self.eval_config.past_frames
         self.future_frames = self.eval_config.future_frames
-        self.eval_pos_err = self.eval_config.pos_err
+        self.eval_pos_err = self.eval_config.pos_err or cfg.visualize
 
         # load training configuration of experiment
         self.exp_path = os.path.join(paths.RUN_PATH, self.eval_config.experiment)
@@ -251,7 +214,10 @@ class Evaluator:
                 stats_ang_per_asset[filename[0]] = stats_ang_err_asset.mean
 
         # save predicted poses with model
-        poses_filename = os.path.join(self.exp_path, "predictions.npz")
+        file_name = "predictions.npz"
+        if self.eval_config.dataset == "real":
+            file_name = "real_predictions.npz"
+        poses_filename = os.path.join(self.exp_path, file_name)
         with open(poses_filename, "wb") as fout:
             np.savez_compressed(fout, **predicted_poses)
 
@@ -497,7 +463,7 @@ class Evaluator:
             from sparsesuit.utils import visualization
 
             verts = [targ_verts_np, np.asarray(pred_verts_aligned)]
-            vertex_colors = ["green", "orange"]
+            vertex_colors = ["green", "gray"]
             joints = [targ_joints_np, np.asarray(pred_joints_aligned)]
 
             # show vertex indices of sensors used in training
@@ -506,7 +472,7 @@ class Evaluator:
             sens_verts = self.train_config.dataset.vert_ids
             train_sens_verts = [sens_verts[idx] for idx in train_sens_ids]
             sensors_vis = [
-                targ_verts_np[:, train_sens_verts],
+                pred_verts_aligned[:, train_sens_verts],
             ]
 
             visualization.vis_smpl(
@@ -522,6 +488,43 @@ class Evaluator:
             )
 
         return mm * 100, pred_joints_sel  # convert m to cm
+
+
+def joint_angle_error(predicted_pose_params, target_pose_params):
+    """
+    Computes the distance in joint angles in degrees between predicted and target joints for every given frame. Currently,
+    this function can only handle input pose parameters represented as rotation matrices.
+
+    :param predicted_pose_params: An np array of shape `(seq_length, dof)` where `dof` is 216, i.e. a 3-by-3 rotation
+      matrix for each of the 24 joints.
+    :param target_pose_params: An np array of the same shape as `predicted_pose_params` representing the target poses.
+    :return: An np array of shape `(seq_length, 24)` containing the joint angle error in Radians for each joint.
+    """
+    seq_length, dof = predicted_pose_params.shape[0], predicted_pose_params.shape[1]
+    assert dof == 216, "unexpected number of degrees of freedom"
+    assert (
+        target_pose_params.shape[0] == seq_length and target_pose_params.shape[1] == dof
+    ), "target_pose_params must match predicted_pose_params"
+
+    # reshape to have rotation matrices explicit
+    n_joints = dof // 9
+    p1 = np.reshape(predicted_pose_params, [-1, n_joints, 3, 3])
+    p2 = np.reshape(target_pose_params, [-1, n_joints, 3, 3])
+
+    # compute R1 * R2.T, if prediction and target match, this will be the identity matrix
+    r1 = np.reshape(p1, [-1, 3, 3])
+    r2 = np.reshape(p2, [-1, 3, 3])
+    r2t = np.transpose(r2, [0, 2, 1])
+    r = np.matmul(r1, r2t)
+
+    # convert `r` to angle-axis representation and extract the angle, which is our measure of difference between
+    # the predicted and target orientations
+    angles = []
+    for i in range(r1.shape[0]):
+        aa, _ = cv2.Rodrigues(r[i])
+        angles.append(utils.rad2deg(np.linalg.norm(aa)))
+
+    return np.reshape(np.array(angles), [seq_length, n_joints])
 
 
 @hydra.main(config_path="conf", config_name="evaluation")
