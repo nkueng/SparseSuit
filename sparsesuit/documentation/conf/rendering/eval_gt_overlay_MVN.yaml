@@ -1,37 +1,34 @@
 defaults:
   - default
 
-name: eval_gt_overlay
-source: AMASS_SSP_nn
+name: eval_gt_overlay_MVN
+source: AMASS_MVN_nn
 models:
-  - 2108251857-minimal_outer
-  - 2109291940-11_a
-  - 2109292135-13_a
-  - 2108251334-15_sym_in
-  - 2109292240-SSP_baseline
+  - 2110021917-MVN_DIP
+  - 2110021848-MVN_baseline
 assets:
 # [asset_idx, frame_idx]
   - [1, 200]  # throwing
   - [5, 100]  # side steps
-  - [7, 1080]  # bending arms
-  - [8, 100]  # sitting
-  - [15, 500]  # dancing
-  - [20, 100]  # simple walking
-  - [27, 2920]  # walking and rotating arms
+#  - [7, 1080]  # bending arms
+#  - [8, 100]  # sitting
+#  - [15, 500]  # dancing
+#  - [20, 100]  # simple walking
+#  - [27, 2920]  # walking and rotating arms
 body_transparency: 0.0
 show_from_behind: False
 use_default_pose: False
 show_sensors: True
-sensor_config: SSP
+sensor_config: MVN
 show_vertex_distance: False
 show_gt: True
 render_frames: 5
 render_every_n_frame: 20
-show_rendering: True
+show_rendering: False
 orthographic_camera: True
 camera_translation: [0, 0.5, 1.75]
 render_width: 800
-make_gif: False
+make_gif: True
 gif_fps: 15
 
 

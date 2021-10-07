@@ -91,12 +91,15 @@ def assemble_input_target(orientation, acceleration, pose, sens_ind):
         acceleration, [acceleration.shape[0], acceleration.shape[1], -1, 3]
     )
 
+    # extract only selected sensors
     oris_sel = oris[:, :, sens_ind]
     accs_sel = accs[:, :, sens_ind]
 
+    # vectorize
     oris_vec = np.reshape(oris_sel, [oris_sel.shape[0], oris_sel.shape[1], -1])
     accs_vec = np.reshape(accs_sel, [accs_sel.shape[0], accs_sel.shape[1], -1])
 
+    # convert from numpy to tensor
     input_vec = torch.cat([oris_vec, accs_vec], dim=2)
     target_vec = torch.cat([pose, accs_vec], dim=2)
     return input_vec, target_vec
@@ -145,6 +148,7 @@ def remove_scaling(rotations):
 class BigDataset(Dataset):
     def __init__(self, path, length):
         self.path = path
+        self.folders = sorted(os.listdir(path))
         self.length = length
 
     def __len__(self):
@@ -152,7 +156,7 @@ class BigDataset(Dataset):
 
     def __getitem__(self, index):
         if 0 <= index < self.length:
-            item_path = os.path.join(self.path, str(index))
+            item_path = os.path.join(self.path, self.folders[index])
             filename = os.listdir(item_path)[0]
             with np.load(os.path.join(item_path, filename), allow_pickle=True) as data:
                 data_in = dict(data)

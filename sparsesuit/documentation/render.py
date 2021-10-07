@@ -17,8 +17,8 @@ from sparsesuit.utils import utils, smpl_helpers
 
 
 @hydra.main(config_path="conf", config_name="rendering")
-def render_from_config(cfg: DictConfig):
-    cfg = cfg.rendering
+def render_from_config(config: DictConfig):
+    cfg = DictConfig(config.rendering)
 
     # GPU setup
     utils.make_deterministic(14)
@@ -52,16 +52,23 @@ def render_from_config(cfg: DictConfig):
             )
             # set root orientation to zero
             poses_padded[:, :3] = 0
-        elif cfg.source == "AMASS_SSP_nn":
+        elif cfg.source in ["AMASS_MVN_nn", "AMASS_SSP_nn", "DIP_IMU_17_nn"]:
             # load motion asset in normalized form
-            src_dir = paths.AMASS_PATH + "_SSP_nn"
+            if cfg.real_data:
+                src_dir = os.path.join(paths.DATASET_PATH, "Real", cfg.source)
+            else:
+                src_dir = os.path.join(paths.DATASET_PATH, "Synthetic", cfg.source)
             filelist = []
+            order = []
             for root, dirs, files in os.walk(os.path.join(src_dir, "test")):
                 for file in files:
                     if file.endswith(".npz"):
                         filelist.append(os.path.join(root, file))
+                        order.append(int(root.split("/")[-1]))
+
+            files = [file for _, file in sorted(zip(order, filelist))]
             motions = []
-            for file in filelist:
+            for file in files:
                 motion_data = np.load(file)
                 motions.append(motion_data["pose"])
 
@@ -82,13 +89,20 @@ def render_from_config(cfg: DictConfig):
                 for model in cfg.models:
                     # load model predictions
                     model_path = os.path.join(paths.RUN_PATH, model)
-                    with np.load(os.path.join(model_path, "predictions.npz")) as data:
+                    pred_name = (
+                        "real_predictions.npz" if cfg.real_data else "predictions.npz"
+                    )
+                    with np.load(os.path.join(model_path, pred_name)) as data:
                         data_in = dict(data)
                     predictions[model] = list(data_in.values())
                     # load model config
-                    sens[model] = utils.load_config(model_path).experiment.sensors
-                    sens[model].append("left_pelvis")
-                    sens[model].append("right_pelvis")
+                    exp_config = utils.load_config(model_path).experiment
+                    sens[model] = exp_config.sensors
+                    if exp_config.config == "SSP":
+                        sens[model].append("left_pelvis")
+                        sens[model].append("right_pelvis")
+                    elif exp_config.config == "MVN":
+                        sens[model].append("pelvis")
 
         elif cfg.source == "DIP_IMU_17":
             # load real motion assets in MVN configuration
@@ -138,7 +152,7 @@ def render_from_config(cfg: DictConfig):
         cfg.render_frames *= cfg.render_every_n_frame
         cfg.render_every_n_frame = 1
 
-    if cfg.source == "AMASS_SSP_nn":
+    if cfg.source in ["AMASS_MVN_nn", "AMASS_SSP_nn", "DIP_IMU_17_nn"]:
         if "models" in cfg:
             # render selected frames for all models
             for model in cfg.models:
@@ -146,6 +160,9 @@ def render_from_config(cfg: DictConfig):
                 for asset_idx, frame_idx in cfg.assets:
                     last_frame = (
                         frame_idx + cfg.render_every_n_frame * cfg.render_frames
+                    )
+                    cfg.frame_range = list(
+                        range(frame_idx, last_frame, cfg.render_every_n_frame)
                     )
                     poses_i = pred_i[asset_idx][0][
                         frame_idx : last_frame : cfg.render_every_n_frame
@@ -162,6 +179,9 @@ def render_from_config(cfg: DictConfig):
             # render selected frames for ground truth
             for asset_idx, frame_idx in cfg.assets:
                 last_frame = frame_idx + cfg.render_every_n_frame * cfg.render_frames
+                cfg.frame_range = list(
+                    range(frame_idx, last_frame, cfg.render_every_n_frame)
+                )
                 poses_padded_i = poses_padded[asset_idx][
                     frame_idx : last_frame : cfg.render_every_n_frame
                 ]
@@ -177,21 +197,33 @@ def render_from_config(cfg: DictConfig):
                 )
                 folder_name = cfg.name + "/" + str(i) + "_" + folder_name
                 cfg_i.name = folder_name
+                cfg_i.frame_range = list(
+                    range(0, len(poses_padded_i), cfg.render_every_n_frame)
+                )
+                poses_padded_i = poses_padded_i[cfg_i.frame_range]
                 render_poses(poses_padded_i, smpl_model, cfg_i)
 
     elif cfg.source == "DIP_IMU_17":
         # make sure real acc and ori signal are rendered
-        acc = data_in["imu_acc"][cfg.frame_idx : last_frame]
-        ori = data_in["imu_ori"][cfg.frame_idx : last_frame]
+        cfg.frame_range = list(
+            range(cfg.frame_idx, last_frame, cfg.render_every_n_frame)
+        )
+
+        acc = data_in["imu_acc"][cfg.frame_range]
+        ori = data_in["imu_ori"][cfg.frame_range]
         render_poses(poses_padded, smpl_model, cfg, acc=acc, ori=ori)
 
     elif cfg.source == "DIP_IMU_6_NN":
         # make sure real acc and ori signal are rendered
         seq_len = len(poses_padded)
-        acc = data_in["acceleration"][cfg.asset_idx][
-            cfg.frame_idx : last_frame
-        ].reshape([seq_len, -1, 3])
-        ori = data_in["orientation"][cfg.asset_idx][cfg.frame_idx : last_frame].reshape(
+        cfg.frame_range = list(
+            range(cfg.frame_idx, last_frame, cfg.render_every_n_frame)
+        )
+
+        acc = data_in["acceleration"][cfg.asset_idx][cfg.frame_range].reshape(
+            [seq_len, -1, 3]
+        )
+        ori = data_in["orientation"][cfg.asset_idx][cfg.frame_range].reshape(
             [seq_len, -1, 3, 3]
         )
         render_poses(poses_padded, smpl_model, cfg, acc=acc, ori=ori)
@@ -222,11 +254,12 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None, acc=None, ori=Non
     # iterate over desired frames in sequence
     seq_len = len(poses_padded)
     for idx_i in range(seq_len):
-        print("rendering frame {}".format(idx_i))
         if cfg.show_accelerations and (
             idx_i < cfg.acc_delta or seq_len - cfg.acc_delta <= idx_i
         ):
             continue
+
+        print("rendering frame {}".format(cfg.frame_range[idx_i]))
 
         pose_i = poses_padded[[idx_i]]
 
@@ -437,7 +470,7 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None, acc=None, ori=Non
                     paths.DOC_PATH,
                     "images",
                     cfg.name,
-                    str(idx_i) + "_" + filename + ".png",
+                    str(cfg.frame_range[idx_i]) + "_" + filename + ".png",
                 )
                 print(filename)
                 im_arr = np.expand_dims(body_image, axis=(0, 1, 2))

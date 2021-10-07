@@ -151,9 +151,18 @@ def extract_from_norm_ds(poses):
     # transform rot mat to aa
     smpl_joint_ori = np.reshape(utils.rot_matrix_to_aa(poses), [num_frames, -1, 3])
 
+    # adapt to number of sensors in dataset
+    num_sensors = smpl_joint_ori.shape[1]
+    if num_sensors == 19:
+        joint_ids = sensors.SMPL_SSP_JOINTS
+    elif num_sensors == 15:
+        joint_ids = sensors.SMPL_DIP_JOINTS
+    else:
+        raise NameError
+
     # copy orientations into SMPLX pose vector
     smplx_joint_ori = np.zeros([num_frames, sensors.NUM_SMPLX_JOINTS, 3])
-    smplx_joint_ori[:, sensors.SMPL_SSP_JOINTS] = smpl_joint_ori
+    smplx_joint_ori[:, joint_ids] = smpl_joint_ori
 
     return torch.Tensor(np.reshape(smplx_joint_ori, [num_frames, -1]))
 

@@ -1,0 +1,36 @@
+defaults:
+  - default
+
+name: eval_gt_overlay_MVN_real
+source: DIP_IMU_17_nn
+models:
+  - 2110021848-MVN_baseline
+  - 2110021917-MVN_DIP
+assets:
+# [asset_idx, frame_idx]
+  - [0, 340]  # lifting arm
+  - [2, 1400]  # stretching out arms
+  - [3, 870]  # leg raise
+  - [7, 300]  # jumping jacks
+  - [10, 200]  # rotating arms
+  - [11, 1160]  # raising arms
+  - [12, 2400] # squatting
+  - [13, 300]  # walking (sideways?)
+body_transparency: 0.0
+show_from_behind: False
+use_default_pose: False
+show_sensors: True
+sensor_config: MVN
+real_data: True
+show_vertex_distance: False
+show_gt: True
+render_frames: 5
+render_every_n_frame: 20
+show_rendering: False
+orthographic_camera: True
+camera_translation: [0, 0.5, 1.75]
+render_width: 800
+make_gif: True
+gif_fps: 15
+
+

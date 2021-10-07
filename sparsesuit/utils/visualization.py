@@ -29,8 +29,9 @@ def vis_smpl(
     colors = {
         "yellow": [1, 1, 0, 0.8],  # raw prediction
         "orange": [1, 0.5, 0, 0.8],  # aligned prediction
-        "green": [0.17, 1, 0, 0.8],  # ground truth
+        "green": [0.17, 1, 0, 0.2],  # ground truth
         "black": [0, 0, 0, 0.8],  # black for text
+        "gray": [0.7, 0.7, 0.7, 1],  # gray for prediction
     }
 
     # compute translation vectors in case of side-by-side comparison
