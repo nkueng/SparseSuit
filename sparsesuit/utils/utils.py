@@ -200,3 +200,14 @@ def rot_mat(angle=0.0, axis="x"):
         mat[1, 1] = cos_
 
     return mat
+
+
+def rot_from_vecs(vec_init, vec_goal):
+    """
+    Computes the rotation matrix that transforms vec_init into vec_goal.
+    """
+    rot_axis = np.cross(
+        vec_init / np.linalg.norm(vec_init), vec_goal / np.linalg.norm(vec_goal)
+    )
+    rot_angle = np.arcsin(np.linalg.norm(rot_axis))
+    return aa_to_rot_matrix(rot_angle * rot_axis).reshape([3, 3])
