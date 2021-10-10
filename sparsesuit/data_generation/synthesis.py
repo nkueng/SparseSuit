@@ -53,6 +53,8 @@ class Synthesizer:
         if self.add_noise:
             target_name += "_noisy"
 
+        target_name += "_acc" + str(self.acc_delta)
+
         self.trgt_dir = target_name
         self.joint_ids = [sensors.SENS_JOINTS_IDS[sensor] for sensor in self.sens_names]
 

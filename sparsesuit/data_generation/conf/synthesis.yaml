@@ -1,7 +1,7 @@
 dataset:
   config: MVN
   type: synthetic
-  acc_delta: 4
+  acc_delta: 1
   noise: False
   acc_noise: 0.0
   fps: 60

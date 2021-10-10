@@ -1,9 +1,11 @@
 dataset:
   config: MVN
   type: synthetic
+  acc_delta: 1
   noise: False
   tar: False
-  del_interm: False
+train_chunk_len: 300
+del_interm: False
 visualize: False
 debug: False
 

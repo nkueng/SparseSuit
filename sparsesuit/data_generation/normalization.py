@@ -65,10 +65,13 @@ class Normalizer:
             if self.dataset_type == "synthetic":
                 src_folder += "_MVN"
             sens_names = sensors.SENS_NAMES_MVN
-            self.pred_trgt_joints = sensors.SMPL_DIP_JOINTS
+            self.pred_trgt_joints = sensors.SMPL_SSP_JOINTS
 
         else:
             raise NameError("Invalid dataset configuration. Aborting!")
+
+        if self.dataset_type == "synthetic":
+            src_folder += "_acc" + str(cfg.dataset.acc_delta)
 
         sensor_ids = np.arange(0, len(sens_names))
 
@@ -349,125 +352,131 @@ class Normalizer:
         pose_dim = len(mean_pose)
 
         # iterate over all normalized assets
-        # using list since it is mutable
+        filelist = []
+        for subdir, dirs, files in os.walk(self.norm_dir):
+            for file in files:
+                file_path = os.path.join(subdir, file)
+                filelist.append(file_path)
+
+        # using list for counter variable since it is mutable
         seq_count_train, seq_count_test, seq_count_valid = (
             [0],
             [0],
             [0],
         )
 
-        seq_count = None
-        for subdir, dirs, files in os.walk(self.norm_dir):
-            for file in files:
-                file_path = os.path.join(subdir, file)
-                with np.load(file_path, allow_pickle=True) as data:
-                    data_dict = dict(data)
+        num_files = len(filelist)
+        for file_path in filelist:
+            with np.load(file_path, allow_pickle=True) as data:
+                data_dict = dict(data)
 
-                # scale data for zero mean and unit variance
-                ori_scaled = (data_dict["orientation"] - mean_ori) / std_ori
-                acc_scaled = (data_dict["acceleration"] - mean_acc) / std_acc
-                pose_scaled = (data_dict["pose"] - mean_pose) / std_pose
+            # scale data for zero mean and unit variance
+            ori_scaled = (data_dict["orientation"] - mean_ori) / std_ori
+            acc_scaled = (data_dict["acceleration"] - mean_acc) / std_acc
+            pose_scaled = (data_dict["pose"] - mean_pose) / std_pose
 
-                subject_i = subdir.split(self.norm_dir)[1]
-                motion_type_i = file.split(".")[0]
+            subject_i = file_path.split("/")[-2]
+            motion_type_i = file_path.split("/")[-1].split(".")[0]
 
-                # save DIP-IMU different from AMASS
-                if self.dataset_type == "real":
-                    # DIP-IMU: distinguish training, evaluation and test set like authors did
-                    # check for subjects in test set
-                    dataset_name = self.dataset_mapping.get(subject_i)
+            # save DIP-IMU different from AMASS
+            if self.dataset_type == "real":
+                # DIP-IMU: distinguish training, evaluation and test set like authors did
+                # check for subjects in test set
+                dataset_name = self.dataset_mapping.get(subject_i)
+                if dataset_name is None:
+                    # check for motion types in validation set
+                    dataset_name = self.dataset_mapping.get(
+                        subject_i + "/" + motion_type_i
+                    )
+
                     if dataset_name is None:
-                        # check for motion types in validation set
-                        dataset_name = self.dataset_mapping.get(
-                            subject_i + "/" + motion_type_i
-                        )
-
-                        if dataset_name is None:
-                            # if subject + motion_type is not in dict, it belongs to the training dataset
-                            dataset_name = "training"
-                elif self.dataset_type == "synthetic":
-                    # split AMASS into 96.8/3/0.2 training/validation/testing
-                    train_split = 0.968
-                    validation_split = 0.998
-                    rand = np.random.random()
-                    if rand <= train_split:
-                        dataset_name = self.dataset_names[0]
-                    elif rand <= validation_split:
-                        dataset_name = self.dataset_names[1]
-                    else:
-                        dataset_name = self.dataset_names[2]
-
-                # save in webdataset format
-                file_id_i = subject_i + "_" + motion_type_i
-
-                ori_buffer = []
-                acc_buffer = []
-                pose_buffer = []
-                if dataset_name == "training":
-                    # split sequences into chunks of N frames, discard incomplete last one
-                    N = 300
-                    seq_length = len(ori_scaled)
-                    num_compl_seq = seq_length // N
-
-                    ori_chunked = np.reshape(
-                        ori_scaled[: N * num_compl_seq], (-1, N, ori_dim)
-                    )
-                    acc_chunked = np.reshape(
-                        acc_scaled[: N * num_compl_seq], (-1, N, acc_dim)
-                    )
-                    pose_chunked = np.reshape(
-                        pose_scaled[: N * num_compl_seq], (-1, N, pose_dim)
-                    )
-
-                    for i in range(num_compl_seq):
-                        ori_buffer.append(ori_chunked[i])
-                        acc_buffer.append(acc_chunked[i])
-                        pose_buffer.append(pose_chunked[i])
-
-                    seq_count = seq_count_train
+                        # if subject + motion_type is not in dict, it belongs to the training dataset
+                        dataset_name = "training"
+            elif self.dataset_type == "synthetic":
+                # split AMASS into 96.8/3/0.2 training/validation/testing
+                train_split = 0.968
+                validation_split = 0.998
+                rand = np.random.random()
+                if rand <= train_split:
+                    dataset_name = self.dataset_names[0]
+                elif rand <= validation_split:
+                    dataset_name = self.dataset_names[1]
                 else:
-                    # save sequence as a whole
-                    ori_buffer.append(ori_scaled)
-                    acc_buffer.append(acc_scaled)
-                    pose_buffer.append(pose_scaled)
+                    dataset_name = self.dataset_names[2]
 
-                    seq_count = (
-                        seq_count_test if dataset_name == "test" else seq_count_valid
+            # save in webdataset format
+            file_id_i = subject_i + "_" + motion_type_i
+
+            ori_buffer = []
+            acc_buffer = []
+            pose_buffer = []
+            if dataset_name == "training":
+                # split sequences into chunks of chunk_len frames, discard incomplete last one
+                chunk_len = self.config.train_chunk_len
+                seq_length = len(ori_scaled)
+                num_compl_seq = seq_length // chunk_len
+
+                ori_chunked = np.reshape(
+                    ori_scaled[: chunk_len * num_compl_seq], (-1, chunk_len, ori_dim)
+                )
+                acc_chunked = np.reshape(
+                    acc_scaled[: chunk_len * num_compl_seq], (-1, chunk_len, acc_dim)
+                )
+                pose_chunked = np.reshape(
+                    pose_scaled[: chunk_len * num_compl_seq], (-1, chunk_len, pose_dim)
+                )
+
+                for i in range(num_compl_seq):
+                    ori_buffer.append(ori_chunked[i])
+                    acc_buffer.append(acc_chunked[i])
+                    pose_buffer.append(pose_chunked[i])
+
+                seq_count = seq_count_train
+            else:
+                # save sequence as a whole
+                ori_buffer.append(ori_scaled)
+                acc_buffer.append(acc_scaled)
+                pose_buffer.append(pose_scaled)
+
+                if dataset_name == "test":
+                    seq_count = seq_count_test
+                else:
+                    seq_count = seq_count_valid
+
+            for ori_i, acc_i, pose_i in zip(ori_buffer, acc_buffer, pose_buffer):
+                folder_num = str(seq_count[0]).zfill(5)
+                dir_name = os.path.join(self.trgt_dir, dataset_name, folder_num)
+                Path(dir_name).mkdir(parents=True, exist_ok=True)
+
+                if self.tar:
+                    # write npy files
+                    input_filename = dir_name + "/" + file_id_i + ".ori.npy"
+                    with open(input_filename, "wb") as f:
+                        np.save(f, ori_i)
+
+                    output_filename = dir_name + "/" + file_id_i + ".acc.npy"
+                    with open(output_filename, "wb") as f:
+                        np.save(f, acc_i)
+
+                    output_filename = dir_name + "/" + file_id_i + ".pose.npy"
+                    with open(output_filename, "wb") as f:
+                        np.save(f, pose_i)
+                else:
+                    # write all data to one file only
+                    out_dict = {
+                        "ori": ori_i,
+                        "acc": acc_i,
+                        "pose": pose_i,
+                    }
+                    output_filename = os.path.join(
+                        dir_name, subject_i + "_" + motion_type_i + ".npz"
                     )
+                    with open(output_filename, "wb") as fout:
+                        np.savez_compressed(fout, **out_dict)
 
-                for ori_i, acc_i, pose_i in zip(ori_buffer, acc_buffer, pose_buffer):
-                    dir_name = os.path.join(
-                        self.trgt_dir, dataset_name, str(seq_count[0])
-                    )
-                    Path(dir_name).mkdir(parents=True, exist_ok=True)
+                seq_count[0] += 1
 
-                    if self.tar:
-                        # write npy files
-                        input_filename = dir_name + "/" + file_id_i + ".ori.npy"
-                        with open(input_filename, "wb") as f:
-                            np.save(f, ori_i)
-
-                        output_filename = dir_name + "/" + file_id_i + ".acc.npy"
-                        with open(output_filename, "wb") as f:
-                            np.save(f, acc_i)
-
-                        output_filename = dir_name + "/" + file_id_i + ".pose.npy"
-                        with open(output_filename, "wb") as f:
-                            np.save(f, pose_i)
-                    else:
-                        # write all data to one file only
-                        out_dict = {
-                            "ori": ori_i,
-                            "acc": acc_i,
-                            "pose": pose_i,
-                        }
-                        output_filename = dir_name + subject_i + "_" + file
-                        with open(output_filename, "wb") as fout:
-                            np.savez_compressed(fout, **out_dict)
-
-                    seq_count[0] += 1
-
-                self.logger.info("Processed {}/{}".format(subject_i, motion_type_i))
+            self.logger.info("Processed {}/{}".format(subject_i, motion_type_i))
 
         # save stats with dataset
         stats_dict = {
