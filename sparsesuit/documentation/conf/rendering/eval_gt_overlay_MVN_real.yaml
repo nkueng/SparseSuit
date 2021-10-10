@@ -4,6 +4,7 @@ defaults:
 name: eval_gt_overlay_MVN_real
 source: DIP_IMU_17_nn
 models:
+  - 2110071209-MVN_baseline_real
   - 2110021848-MVN_baseline
   - 2110021917-MVN_DIP
 assets:
