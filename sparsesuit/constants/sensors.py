@@ -211,28 +211,33 @@ SREC_2_SSP = {
     "right_hand": "right_wrist",
 }
 
+# mapping RKK Studio FBX joint names to our convention
 FBX2SMPL = {
-    'Hips': "pelvis",
+    "Hips": "pelvis",
     "LeftThigh": "left_hip",
     "LeftShin": "left_knee",
     "LeftFoot": "left_ankle",
+    "LeftToe": "left_foot",
     "RightThigh": "right_hip",
     "RightShin": "right_knee",
     "RightFoot": "right_ankle",
-    'Spine1': "spine1",
-    'Spine2': "spine2",
-    'Spine3': "spine2",  # overwrites Spine2
-    'Spine4': "spine3",
-    'LeftShoulder': "left_collar",
-    'LeftArm': "left_shoulder",
-    'LeftForeArm': "left_elbow",
-    'LeftHand': "left_wrist",
-    'Neck': "neck",
-    'Head': "head",
-    'RightShoulder': "right_collar",
-    'RightArm': "right_shoulder",
-    'RightForeArm': "right_elbow",
-    'RightHand': "right_wrist",
+    "RightToe": "right_foot",
+    "Spine1": "spine1",
+    "Spine2": "spine2",
+    "Spine3": "spine2",  # overwrites Spine2
+    "Spine4": "spine3",
+    "LeftShoulder": "left_collar",
+    "LeftArm": "left_shoulder",
+    "LeftForeArm": "left_elbow",
+    "LeftHand": "left_wrist",
+    "LeftFinger3Metacarpal": "left_hand",
+    "Neck": "neck",
+    "Head": "head",
+    "RightShoulder": "right_collar",
+    "RightArm": "right_shoulder",
+    "RightForeArm": "right_elbow",
+    "RightHand": "right_wrist",
+    "RightFinger3Metacarpal": "right_hand",
 }
 
 # mocap markers used for illustrative purposes
