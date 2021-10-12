@@ -204,7 +204,8 @@ def rot_mat(angle=0.0, axis="x"):
 
 def rot_from_vecs(vec_init, vec_goal):
     """
-    Computes the rotation matrix that transforms vec_init into vec_goal.
+    Computes the "active" rotation matrix that transforms vec_init into vec_goal.
+    Can also be understood as the "passive" rotation from frame goal to frame init.
     """
     rot_axis = np.cross(
         vec_init / np.linalg.norm(vec_init), vec_goal / np.linalg.norm(vec_goal)

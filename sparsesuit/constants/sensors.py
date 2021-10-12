@@ -224,8 +224,8 @@ FBX2SMPL = {
     "RightToe": "right_foot",
     "Spine1": "spine1",
     "Spine2": "spine2",
-    "Spine3": "spine2",  # overwrites Spine2
-    "Spine4": "spine3",
+    "Spine3": "spine3",
+    "Spine4": "spine4",
     "LeftShoulder": "left_collar",
     "LeftArm": "left_shoulder",
     "LeftForeArm": "left_elbow",

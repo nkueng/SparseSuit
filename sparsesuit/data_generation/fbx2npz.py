@@ -1,3 +1,6 @@
+"""This script extracts the motion data (skeleton, joint positions, and rotations) from FBX files as produced by
+Rokoko Studio and dumps them into .npz files for easier processing on linux. This script currently works only on
+macOS because the FBXImporter binaries were only compiled for this system. """
 import os
 import numpy as np
 from sparsesuit.constants import paths
@@ -51,6 +54,3 @@ for fbx_folder in fbx_folders:
                     os.remove(file_path)
                 except OSError:
                     pass
-
-
-
