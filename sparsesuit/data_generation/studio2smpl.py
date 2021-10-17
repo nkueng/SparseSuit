@@ -36,7 +36,7 @@ def retarget_motion(motion):
     skeleton_in.remove("Root")
 
     # extract relevant joints from fbx data
-    fbx2smpl = sensors.FBX2SMPL
+    fbx2smpl = sensors.FBX_2_SMPL
     joints_rel = list(fbx2smpl.keys())
     positions_rel = []
     rotations_rel = []
@@ -77,10 +77,10 @@ def retarget_motion(motion):
         sensors.SMPL_JOINT_IDS[trgt_joint]
         for trgt_joint in retargeter.target_skeleton_joints
     ]
-    smpl_poses = np.tile(np.identity(3), [seq_len, sensors.NUM_SMPLX_JOINTS, 1, 1])
+    smpl_poses = np.tile(np.zeros(3), [seq_len, sensors.NUM_SMPLX_JOINTS, 1])
     for i in range(seq_len):
         rots = R.from_quat(r_out[i])
-        smpl_poses[i, smpl_ids] = rots.as_matrix()
+        smpl_poses[i, smpl_ids] = rots.as_rotvec()
 
     return smpl_poses.reshape([seq_len, -1])
 
@@ -100,6 +100,11 @@ if __name__ == "__main__":
 
     # retarget from FBX skeleton to SMPL skeleton
     for file in npz_files:
+        # DEBUG
+        # file = file.split("Export")[0]
+        # file += "Export/01/5 Maximal jump/take-10_DEFAULT_R15.npz"
+
+        # skip output files
         if "smpl" in file:
             continue
 
@@ -107,6 +112,9 @@ if __name__ == "__main__":
 
         # load data
         data = get_data(file)
+        if data is None:
+            print("Got empty file for {}. Skipping!".format(file))
+            continue
 
         # retarget to SMPL
         smpl_poses = retarget_motion(data)

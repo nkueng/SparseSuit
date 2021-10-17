@@ -52,23 +52,26 @@ def render_from_config(config: DictConfig):
             )
             # set root orientation to zero
             poses_padded[:, :3] = 0
-        elif cfg.source in ["AMASS_MVN_nn", "AMASS_SSP_nn", "DIP_IMU_17_nn"]:
+        elif cfg.source in [
+            "AMASS_MVN_nn",
+            "AMASS_SSP_nn",
+            "DIP_IMU_17_nn",
+            "RKK_19_nn",
+        ]:
             # load motion asset in normalized form
             if cfg.real_data:
                 src_dir = os.path.join(paths.DATASET_PATH, "Real", cfg.source)
             else:
                 src_dir = os.path.join(paths.DATASET_PATH, "Synthetic", cfg.source)
             filelist = []
-            order = []
             for root, dirs, files in os.walk(os.path.join(src_dir, "test")):
                 for file in files:
                     if file.endswith(".npz"):
                         filelist.append(os.path.join(root, file))
-                        order.append(int(root.split("/")[-1]))
 
-            files = [file for _, file in sorted(zip(order, filelist))]
+            filelist = sorted(filelist)
             motions = []
-            for file in files:
+            for file in filelist:
                 motion_data = np.load(file)
                 motions.append(motion_data["pose"])
 
@@ -152,7 +155,12 @@ def render_from_config(config: DictConfig):
         cfg.render_frames *= cfg.render_every_n_frame
         cfg.render_every_n_frame = 1
 
-    if cfg.source in ["AMASS_MVN_nn", "AMASS_SSP_nn", "DIP_IMU_17_nn"]:
+    if cfg.source in [
+        "AMASS_MVN_nn",
+        "AMASS_SSP_nn",
+        "DIP_IMU_17_nn",
+        "RKK_19_nn",
+    ]:
         if "models" in cfg:
             # render selected frames for all models
             for model in cfg.models:

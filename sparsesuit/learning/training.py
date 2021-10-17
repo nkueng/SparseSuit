@@ -47,7 +47,12 @@ class Trainer:
 
         # find differences between this experiment and default hyperparams
         def_path = os.path.join(os.getcwd(), "conf/hyperparams")
-        hyperparams_def = utils.load_config(def_path, "default.yaml")
+        config_name = (
+            "default.yaml"
+            if train_config.dataset == "Synthetic"
+            else "default_real.yaml"
+        )
+        hyperparams_def = utils.load_config(def_path, config_name)
         hyperparams_diff = {
             k: cfg.hyperparams[k]
             for k, _ in set(hyperparams_def.items()) - set(cfg.hyperparams.items())
@@ -106,6 +111,9 @@ class Trainer:
 
             if train_config.config == "MVN":
                 ds_dir = paths.DIP_17_NN_PATH
+
+            if train_config.config == "SSP":
+                ds_dir = paths.RKK_STUDIO_19_NN_PATH
 
             else:
                 raise NameError("Invalid configuration. Aborting!")

@@ -212,7 +212,7 @@ SREC_2_SSP = {
 }
 
 # mapping RKK Studio FBX joint names to our convention
-FBX2SMPL = {
+FBX_2_SMPL = {
     "Hips": "pelvis",
     "LeftThigh": "left_hip",
     "LeftShin": "left_knee",

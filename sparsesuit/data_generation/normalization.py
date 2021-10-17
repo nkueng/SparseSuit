@@ -38,16 +38,26 @@ class Normalizer:
             src_folder = paths.AMASS_PATH
 
         elif self.dataset_type == "real":
-            src_folder = paths.DIP_17_PATH
-            # dict mapping subject and motion types to datasets
-            self.dataset_mapping = {
-                "s_09": "test",
-                "s_10": "test",
-                "s_01/05": "validation",
-                "s_03/05": "validation",
-                "s_07/04": "validation",
-            }
-
+            if self.sens_config == "MVN":
+                src_folder = paths.DIP_17_PATH
+                # dict mapping subject and motion types to datasets
+                self.dataset_mapping = {
+                    "s_09": "test",
+                    "s_10": "test",
+                    "s_01/05": "validation",
+                    "s_03/05": "validation",
+                    "s_07/04": "validation",
+                }
+            elif self.sens_config == "SSP":
+                src_folder = paths.RKK_STUDIO_19_PATH
+                self.dataset_mapping = {
+                    "05": "test",
+                    "01/3_Sidestep_take-7": "validation",
+                    "03/1_Gait_take-3": "validation",
+                    "04/5_Jump_take-9": "validation",
+                    "02/2_Run_take-1": "validation",
+                    "01/4_Sway_take-2": "validation",
+                }
         else:
             raise NameError("Invalid dataset configuration. Aborting!")
 
@@ -70,8 +80,8 @@ class Normalizer:
         else:
             raise NameError("Invalid dataset configuration. Aborting!")
 
-        if self.dataset_type == "synthetic":
-            src_folder += "_acc" + str(cfg.dataset.acc_delta)
+        # if self.dataset_type == "synthetic":
+        # src_folder += "_acc" + str(cfg.dataset.acc_delta)
 
         sensor_ids = np.arange(0, len(sens_names))
 
@@ -123,221 +133,216 @@ class Normalizer:
             raise NameError("Invalid sensor configuration. Aborting!")
 
         # iterate over all subdirectories and files in given path
-        for subdir, dirs, files in os.walk(self.src_dir):
+        file_list = []
+        for root, dirs, files in os.walk(self.src_dir):
             for file in files:
                 # check for correct file format
-                if file.startswith(".") or not (
-                    file.endswith(".npz") or file.endswith(".pkl")
-                ):
+                if file.startswith("."):
                     continue
+                if file.endswith(".npz") or file.endswith(".pkl"):
+                    file_list.append(os.path.join(root, file))
 
-                # load npz or pickle in subdirectory
-                data_in = {}
-                filepath = os.path.join(subdir, file)
-                if filepath.endswith(".npz"):
-                    with np.load(filepath, allow_pickle=True) as data:
-                        data_in = dict(data)
-                elif filepath.endswith(".pkl"):
-                    with open(filepath, "rb") as fin:
-                        data_in = pkl.load(fin, encoding="latin1")
+        file_list = sorted(file_list)
+        for filepath in file_list:
 
-                # extract relevant data
+            # DEBUG
+            # filepath = file_list[215]
+
+            # load npz or pickle in subdirectory
+            if filepath.endswith(".npz"):
+                with np.load(filepath, allow_pickle=True) as data:
+                    data_in = dict(data)
+            elif filepath.endswith(".pkl"):
+                with open(filepath, "rb") as fin:
+                    data_in = pkl.load(fin, encoding="latin1")
+
+            # extract relevant data
+            try:
+                # IMU orientation matrices of sensors
+                oris = data_in["imu_ori"]
+                # IMU acceleration vectors of sensors
+                accs = data_in["imu_acc"]
+                # flattened pose vector of 24 SMPL joints (as rot mat)
+                poses = data_in["gt"]
+                # poses given in axis-angle format need transformation to rot matrix
+                pose2rot = True
+            except KeyError:
                 try:
-                    # AMASS
+                    # legacy convention for DIP_IMU_6
                     # IMU orientation matrices of sensors
-                    oris = data_in["imu_ori"]
+                    oris = np.array(data_in["ori"])
                     # IMU acceleration vectors of sensors
-                    accs = data_in["imu_acc"]
-                    # flattened pose vector of 24 SMPL joints (as rot mat)
-                    poses = data_in["gt"]
-                    # poses given in axis-angle format need transformation to rot matrix
-                    pose2rot = True
+                    accs = np.array(data_in["acc"])
+                    # flattened pose vector of 15 SMPL joints in rot-matrix format
+                    poses = np.array(data_in["poses"])
+                    pose2rot = False
                 except KeyError:
-                    try:
-                        # DIP-IMU
-                        # IMU orientation matrices of sensors
-                        oris = np.array(data_in["ori"])
-                        # IMU acceleration vectors of sensors
-                        accs = np.array(data_in["acc"])
-                        # flattened pose vector of 15 SMPL joints in rot-matrix format
-                        poses = np.array(data_in["poses"])
-                        pose2rot = False
-                    except KeyError:
-                        self.logger.info(
-                            "Input data does not have the right fields. Skipping!"
-                        )
-                        continue
-                seq_length = len(accs)
-
-                # skip if data is empty
-                if seq_length == 0:
+                    self.logger.info(
+                        "Input data does not have the right fields. Skipping!"
+                    )
                     continue
+            seq_length = len(accs)
 
-                # skip if data vectors don't have same length
-                if len(accs) != len(oris) or len(accs) != len(poses):
-                    continue
+            # skip if data is empty
+            if seq_length == 0:
+                print("Empty sequence. Skipping!")
+                continue
 
-                subject_i = subdir.split(self.src_dir + "/")[1]
-                motion_type_i = file.split(".")[0]
+            # skip if data vectors don't have same length
+            if len(accs) != len(oris) or len(accs) != len(poses):
+                continue
 
-                # determine name of file for normalized asset
-                norm_dir_name = os.path.join(self.norm_dir, subject_i)
-                out_filename = os.path.join(norm_dir_name, motion_type_i)
+            subject_i = filepath.split("/")[-2]
+            motion_type_i = filepath.split("/")[-1].split(".")[0]
 
-                # exit if normalized asset already exists -> makes no sense as we need stats from all assets
-                # if Path(out_filename + ".npz").exists():
-                #     self.logger.info(
-                #         "Skipping normalization of {}/{} as it already exists.".format(
-                #             subject_i, motion_type_i
-                #         )
-                #     )
-                #     continue
+            # determine name of file for normalized asset
+            norm_dir_name = os.path.join(self.norm_dir, subject_i)
+            out_filename = os.path.join(norm_dir_name, motion_type_i)
 
-                # remove all frames with NANs
-                acc_sum = np.sum(np.reshape(accs, (seq_length, -1)), axis=1)
-                ori_sum = np.sum(np.reshape(oris, (seq_length, -1)), axis=1)
-                nan_mask = np.isfinite(acc_sum) & np.isfinite(ori_sum)
-                # nan_count = seq_length - np.sum(nan_mask)
-                new_seq_length = np.sum(nan_mask)
-                accs_clean = accs[nan_mask]
-                oris_clean = oris[nan_mask]
+            # exit if normalized asset already exists -> makes no sense as we need stats from all assets
+            # if Path(out_filename + ".npz").exists():
+            #     self.logger.info(
+            #         "Skipping normalization of {}/{} as it already exists.".format(
+            #             subject_i, motion_type_i
+            #         )
+            #     )
+            #     continue
 
-                # extract only sensor data desired in input and in convention ordering
-                accs_sorted = accs_clean[:, self.sensor_ids]
-                oris_sorted = oris_clean[:, self.sensor_ids]
+            # remove all frames with NANs
+            acc_sum = np.sum(np.reshape(accs, (seq_length, -1)), axis=1)
+            ori_sum = np.sum(np.reshape(oris, (seq_length, -1)), axis=1)
+            nan_mask = np.isfinite(acc_sum) & np.isfinite(ori_sum)
+            # nan_count = seq_length - np.sum(nan_mask)
+            new_seq_length = np.sum(nan_mask)
+            accs_clean = accs[nan_mask]
+            oris_clean = oris[nan_mask]
 
-                # normalize orientation and acceleration for each frame w.r.t. root
+            # extract only sensor data desired in input and in convention ordering
+            accs_sorted = accs_clean[:, self.sensor_ids]
+            oris_sorted = oris_clean[:, self.sensor_ids]
+
+            # normalize orientation and acceleration for each frame w.r.t. root
+            if self.sens_config == "SSP":
+                # get root sensor orientations
+                root_oris = np.reshape(oris_sorted[:, root_idx], [-1, 9])
+                # transform to angle-axis
+                root_aas = np.reshape(
+                    utils.rot_matrix_to_aa(root_oris), [new_seq_length, 2, 3]
+                )
+                # compute mean
+                root_aa = np.mean(root_aas, axis=1)
+                # transform back to rotation matrix
+                root_ori = np.reshape(utils.aa_to_rot_matrix(root_aa), [-1, 1, 3, 3])
+                # get inverse to normalize other sensors
+                root_ori_inv = np.transpose(root_ori, [0, 1, 3, 2])
+
+                # get hip sensor accelerations
+                hip_accs = accs_sorted[:, [root_idx]]
+                # average to get virtual sensor acceleration to normalize other sensors
+                root_acc = np.mean(hip_accs, axis=2)
+            elif self.sens_config == "MVN":
+                root_ori_inv = np.transpose(oris_sorted[:, [root_idx]], [0, 1, 3, 2])
+                root_acc = accs_sorted[:, [root_idx]]
+
+            # normalize all orientations
+            oris_norm = np.matmul(root_ori_inv, oris_sorted)
+            # discard root orientation which is always identity
+            oris_norm_wo_root = np.delete(oris_norm, root_idx, axis=1)
+            oris_vec = np.reshape(oris_norm_wo_root, (new_seq_length, -1))
+
+            # normalize all accelerations
+            accs_norm = accs_sorted - root_acc
+            accs_norm = np.matmul(root_ori_inv, accs_norm[..., np.newaxis])
+            # discard root acceleration which is always zero
+            accs_norm_wo_root = np.delete(accs_norm, root_idx, axis=1)
+            accs_vec = np.reshape(accs_norm_wo_root, (new_seq_length, -1))
+
+            # convert poses to rotation matrix format if necessary
+            poses_vec = poses[nan_mask]
+            if pose2rot:
+                # select target joints
+                poses_vec_sel = np.reshape(poses_vec, [new_seq_length, -1, 3])[
+                    :, self.pred_trgt_joints
+                ]
+                # convert pose data from angle-axis vectors to rotation matrices
+                poses_vec_torch = torch.from_numpy(np.reshape(poses_vec_sel, [-1, 3]))
+                poses_vec_rot = lbs.batch_rodrigues(poses_vec_torch).detach().numpy()
+                poses_vec_sel = np.reshape(poses_vec_rot, [new_seq_length, -1])
+            else:
+                # poses given in rot matrix format already, only select relevant
+                poses_vec_sel = np.reshape(poses_vec, [new_seq_length, -1, 3, 3])[
+                    :, self.pred_trgt_joints
+                ]
+                poses_vec_sel = np.reshape(poses_vec_sel, [new_seq_length, -1])
+
+            # save normalized orientations, accelerations and poses locally
+            Path(norm_dir_name).mkdir(parents=True, exist_ok=True)
+
+            # write npz file
+            data_out = {
+                "orientation": oris_vec,
+                "acceleration": accs_vec,
+                "pose": poses_vec_sel,
+            }
+            with open(out_filename + ".npz", "wb") as fout:
+                np.savez_compressed(fout, **data_out)
+
+            # compute statistics for this asset
+            for idx in range(new_seq_length):
+                stats_ori.add(oris_vec[idx])
+                stats_acc.add(accs_vec[idx])
+                stats_pose.add(poses_vec_sel[idx])
+
+            self.logger.info("Normalized {}/{}".format(subject_i, motion_type_i))
+
+            if self.visualize:
+                from sparsesuit.utils import visualization
+
+                frames = 400
+                frame_range = range(0 * frames, 1 * frames)
+                vis_poses = np.tile(np.eye(3), [frames, sensors.NUM_SMPLX_JOINTS, 1, 1])
+                vis_poses[:, self.pred_trgt_joints] = np.reshape(
+                    poses_vec_sel[frame_range], [frames, -1, 3, 3]
+                )
+                # vis_poses[:, 0] = np.array([[1.20919958, 1.20919958, 1.20919958]])
+                poses_torch = torch.from_numpy(vis_poses).float()
+                # compute skin vertices from SMPL pose
+                verts, joints, _ = smpl_helpers.my_lbs(
+                    model=smpl_model,
+                    pose=poses_torch,
+                    pose2rot=False,
+                )
+
+                verts_np, joints_np = (
+                    utils.copy2cpu(verts),
+                    utils.copy2cpu(joints)[:, : sensors.NUM_SMPL_JOINTS],
+                )
+
                 if self.sens_config == "SSP":
-                    # get root sensor orientations
-                    root_oris = np.reshape(oris_sorted[:, root_idx], [-1, 9])
-                    # transform to angle-axis
-                    root_aas = np.reshape(
-                        utils.rot_matrix_to_aa(root_oris), [new_seq_length, 2, 3]
-                    )
-                    # compute mean
-                    root_aa = np.mean(root_aas, axis=1)
-                    # transform back to rotation matrix
-                    root_ori = np.reshape(
-                        utils.aa_to_rot_matrix(root_aa), [-1, 1, 3, 3]
-                    )
-                    # get inverse to normalize other sensors
-                    root_ori_inv = np.transpose(root_ori, [0, 1, 3, 2])
-
-                    # get hip sensor accelerations
-                    hip_accs = accs_sorted[:, [root_idx]]
-                    # average to get virtual sensor acceleration to normalize other sensors
-                    root_acc = np.mean(hip_accs, axis=2)
-                elif self.sens_config == "MVN":
-                    root_ori_inv = np.transpose(
-                        oris_sorted[:, [root_idx]], [0, 1, 3, 2]
-                    )
-                    root_acc = accs_sorted[:, [root_idx]]
-
-                # normalize all orientations
-                oris_norm = np.matmul(root_ori_inv, oris_sorted)
-                # discard root orientation which is always identity
-                oris_norm_wo_root = np.delete(oris_norm, root_idx, axis=1)
-                oris_vec = np.reshape(oris_norm_wo_root, (new_seq_length, -1))
-
-                # normalize all accelerations
-                accs_norm = accs_sorted - root_acc
-                accs_norm = np.matmul(root_ori_inv, accs_norm[..., np.newaxis])
-                # discard root acceleration which is always zero
-                accs_norm_wo_root = np.delete(accs_norm, root_idx, axis=1)
-                accs_vec = np.reshape(accs_norm_wo_root, (new_seq_length, -1))
-
-                # convert poses to rotation matrix format if necessary
-                poses_vec = poses[nan_mask]
-                if pose2rot:
-                    # select target joints
-                    poses_vec_sel = np.reshape(poses_vec, [new_seq_length, -1, 3])[
-                        :, self.pred_trgt_joints
+                    vertex_ids = [
+                        sensors.SENS_VERTS_SSP[sensor_name]
+                        for sensor_name in self.sens_names
                     ]
-                    # convert pose data from angle-axis vectors to rotation matrices
-                    poses_vec_torch = torch.from_numpy(
-                        np.reshape(poses_vec_sel, [-1, 3])
-                    )
-                    poses_vec_rot = (
-                        lbs.batch_rodrigues(poses_vec_torch).detach().numpy()
-                    )
-                    poses_vec_sel = np.reshape(poses_vec_rot, [new_seq_length, -1])
                 else:
-                    # poses given in rot matrix format already, only select relevant
-                    poses_vec_sel = np.reshape(poses_vec, [new_seq_length, -1, 3, 3])[
-                        :, self.pred_trgt_joints
+                    vertex_ids = [
+                        sensors.SENS_VERTS_MVN[sensor_name]
+                        for sensor_name in self.sens_names
                     ]
-                    poses_vec_sel = np.reshape(poses_vec_sel, [new_seq_length, -1])
 
-                # save normalized orientations, accelerations and poses locally
-                Path(norm_dir_name).mkdir(parents=True, exist_ok=True)
-
-                # write npz file
-                data_out = {
-                    "orientation": oris_vec,
-                    "acceleration": accs_vec,
-                    "pose": poses_vec_sel,
-                }
-                with open(out_filename + ".npz", "wb") as fout:
-                    np.savez_compressed(fout, **data_out)
-
-                # compute statistics for this asset
-                for idx in range(new_seq_length):
-                    stats_ori.add(oris_vec[idx])
-                    stats_acc.add(accs_vec[idx])
-                    stats_pose.add(poses_vec_sel[idx])
-
-                self.logger.info("Normalized {}/{}".format(subject_i, motion_type_i))
-
-                if self.visualize:
-                    from sparsesuit.utils import visualization
-
-                    frames = 300
-                    frame_range = range(0 * frames, 1 * frames)
-                    vis_poses = np.tile(
-                        np.eye(3), [frames, sensors.NUM_SMPLX_JOINTS, 1, 1]
-                    )
-                    vis_poses[:, self.pred_trgt_joints] = np.reshape(
-                        poses_vec_sel[frame_range], [frames, -1, 3, 3]
-                    )
-                    # vis_poses[:, 0] = np.array([[1.20919958, 1.20919958, 1.20919958]])
-                    poses_torch = torch.from_numpy(vis_poses).float()
-                    # compute skin vertices from SMPL pose
-                    verts, joints, _ = smpl_helpers.my_lbs(
-                        model=smpl_model,
-                        pose=poses_torch,
-                        pose2rot=False,
-                    )
-
-                    verts_np, joints_np = (
-                        utils.copy2cpu(verts),
-                        utils.copy2cpu(joints)[:, : sensors.NUM_SMPL_JOINTS],
-                    )
-
-                    if self.sens_config == "SSP":
-                        vertex_ids = [
-                            sensors.SENS_VERTS_SSP[sensor_name]
-                            for sensor_name in self.sens_names
-                        ]
-                    else:
-                        vertex_ids = [
-                            sensors.SENS_VERTS_MVN[sensor_name]
-                            for sensor_name in self.sens_names
-                        ]
-
-                    vertices = [verts_np]
-                    vis_sensors = [verts_np[:, vertex_ids]]
-                    orientations = [np.squeeze(oris_norm_wo_root[frame_range])]
-                    accelerations = [np.squeeze(accs_norm_wo_root[frame_range])]
-                    visualization.vis_smpl(
-                        faces=smpl_model.faces,
-                        vertices=vertices,
-                        sensors=vis_sensors,
-                        accs=accelerations,
-                        oris=orientations,
-                        play_frames=frames,
-                        playback_speed=0.5,
-                        add_captions=False,
-                    )
+                vertices = [verts_np]
+                vis_sensors = [verts_np[:, vertex_ids]]
+                orientations = [np.squeeze(oris_norm_wo_root[frame_range])]
+                accelerations = [np.squeeze(accs_norm_wo_root[frame_range])]
+                visualization.vis_smpl(
+                    faces=smpl_model.faces,
+                    vertices=vertices,
+                    sensors=vis_sensors,
+                    accs=accelerations,
+                    oris=orientations,
+                    play_frames=frames,
+                    playback_speed=0.3,
+                    add_captions=False,
+                )
 
         # compute stats
         mean_ori = stats_ori.mean
@@ -351,21 +356,22 @@ class Normalizer:
         acc_dim = len(mean_acc)
         pose_dim = len(mean_pose)
 
-        # iterate over all normalized assets
-        filelist = []
-        for subdir, dirs, files in os.walk(self.norm_dir):
-            for file in files:
-                file_path = os.path.join(subdir, file)
-                filelist.append(file_path)
-
-        # using list for counter variable since it is mutable
+        # using list for counter variables since it is mutable
         seq_count_train, seq_count_test, seq_count_valid = (
             [0],
             [0],
             [0],
         )
 
-        num_files = len(filelist)
+        # iterate over all normalized assets to make them zero-mean unit-variance
+        filelist = []
+        for subdir, dirs, files in os.walk(self.norm_dir):
+            for file in files:
+                file_path = os.path.join(subdir, file)
+                filelist.append(file_path)
+
+        filelist = sorted(filelist)
+
         for file_path in filelist:
             with np.load(file_path, allow_pickle=True) as data:
                 data_dict = dict(data)

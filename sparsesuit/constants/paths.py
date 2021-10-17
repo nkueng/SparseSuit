@@ -27,6 +27,8 @@ AMASS_PATH = os.path.join(DATASET_PATH, "Synthetic/AMASS")
 DIP_17_PATH = os.path.join(DATASET_PATH, "Real/DIP_IMU_17")
 DIP_17_NN_PATH = os.path.join(DATASET_PATH, "Real/DIP_IMU_17_nn")
 DIP_6_NN_PATH = os.path.join(DATASET_PATH, "Real/DIP_IMU_6_nn")
+RKK_STUDIO_19_PATH = os.path.join(DATASET_PATH, "Real/RKK_19")
+RKK_STUDIO_19_NN_PATH = os.path.join(DATASET_PATH, "Real/RKK_19_nn")
 
 ## smpl model data
 SMPL_PATH = os.path.join(DATA_PATH, "SMPL_models")

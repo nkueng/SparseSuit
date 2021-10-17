@@ -88,6 +88,9 @@ class Evaluator:
             if self.suit_config == "MVN":
                 ds_dir = paths.DIP_17_NN_PATH
 
+            if self.suit_config == "SSP":
+                ds_dir = paths.RKK_STUDIO_19_NN_PATH
+
             else:
                 raise NameError("Invalid configuration. Aborting!")
 
