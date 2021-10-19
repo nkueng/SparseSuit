@@ -1,0 +1,20 @@
+evaluation:
+  experiment: 2108251857-minimal_inner
+  dataset: synthetic
+  noise: False
+  past_frames: 20
+  future_frames: 5
+  pos_err: False
+debug: False
+visualize: False
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  sweep:
+    dir: .
+    subdir: .
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
