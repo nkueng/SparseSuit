@@ -21,6 +21,10 @@ class Trainer:
     def __init__(self, cfg):
         self.cfg = cfg
 
+        # TODO: add option for fine-tuning
+        # load pre-trained model
+        # make sure model I/O is the same as for first training
+
         # cuda setup
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -30,8 +34,9 @@ class Trainer:
         # experiment setup
         train_config = cfg.experiment
         self.exp_name = "debug" if cfg.debug else train_config.name
-        train_sens = train_config.sensors
-        num_train_sens = train_config.count
+        train_sens = train_config.sensors.names
+        ds_config = train_config.train_dataset
+        # num_train_sens = train_config.count
 
         # hyper-parameters
         self.hyper_params = cfg.hyperparams
@@ -48,9 +53,7 @@ class Trainer:
         # find differences between this experiment and default hyperparams
         def_path = os.path.join(os.getcwd(), "conf/hyperparams")
         config_name = (
-            "default.yaml"
-            if train_config.dataset == "Synthetic"
-            else "default_real.yaml"
+            "default.yaml" if ds_config.source == "AMASS" else "default_real.yaml"
         )
         hyperparams_def = utils.load_config(def_path, config_name)
         hyperparams_diff = {
@@ -86,37 +89,52 @@ class Trainer:
         self.logger.info(OmegaConf.to_yaml(cfg))
 
         # get dataset required by configuration
-        ds_dir = paths.AMASS_PATH
+        ds_dir = utils.ds_path_from_config(train_config.train_dataset, cfg.debug)
+        self.stats = {}
+        if cfg.train_on_processed:
+            ds_dir += "_nn"
+        else:
+            ds_dir += "_n"
+            stats_path = os.path.join(ds_dir, "stats.npz")
+            if os.path.isfile(stats_path):
+                # load statistics
+                with np.load(stats_path) as stats_data:
+                    self.stats = dict(stats_data)
+
         if cfg.debug:
-            ds_dir += "_debug"
+            # ds_dir += "_debug"
             self.epochs = 2
             self.train_eval_step = 10
 
-        if train_config.dataset == "synthetic":
+        assert os.path.exists(
+            ds_dir
+        ), "Source directory {} does not exist! Check configuration!".format(ds_dir)
 
-            if train_config.config == "SSP":
-                ds_dir += "_SSP"
+        # if train_config.dataset == "synthetic":
+        #
+        #     if train_config.config == "SSP":
+        #         ds_dir += "_SSP"
+        #
+        #     elif train_config.config == "MVN":
+        #         ds_dir += "_MVN"
+        #
+        #     else:
+        #         raise NameError("Invalid configuration. Aborting!")
+        #
+        #     if train_config.noise:
+        #         ds_dir += "_noisy"
+        #     ds_dir += "_nn"
 
-            elif train_config.config == "MVN":
-                ds_dir += "_MVN"
-
-            else:
-                raise NameError("Invalid configuration. Aborting!")
-
-            if train_config.noise:
-                ds_dir += "_noisy"
-            ds_dir += "_nn"
-
-        elif train_config.dataset == "real":
-
-            if train_config.config == "MVN":
-                ds_dir = paths.DIP_17_NN_PATH
-
-            if train_config.config == "SSP":
-                ds_dir = paths.RKK_STUDIO_19_NN_PATH
-
-            else:
-                raise NameError("Invalid configuration. Aborting!")
+        # elif train_config.dataset == "real":
+        #
+        #     if train_config.config == "MVN":
+        #         ds_dir = paths.DIP_17_NN_PATH
+        #
+        #     if train_config.config == "SSP":
+        #         ds_dir = paths.RKK_STUDIO_19_NN_PATH
+        #
+        #     else:
+        #         raise NameError("Invalid configuration. Aborting!")
 
         # get training and validation dataset paths
         self.train_ds_path = os.path.join(ds_dir, "training")
@@ -124,9 +142,9 @@ class Trainer:
 
         # load config of dataset
         self.ds_config = utils.load_config(ds_dir).dataset
-        self.train_ds_size = self.ds_config.assets.training
-        self.valid_ds_size = self.ds_config.assets.validation
-        ds_sens = self.ds_config.sensors
+        self.train_ds_size = self.ds_config.normalized_assets.training
+        self.valid_ds_size = self.ds_config.normalized_assets.validation
+        ds_sens = self.ds_config.normalized_sensors
         num_trgt_joints = len(self.ds_config.pred_trgt_joints)
 
         # find indices of training sensors in dataset vectors
@@ -197,7 +215,7 @@ class Trainer:
                 self.logger.debug("\nLoaded files {}:".format("\n".join(file_id)))
 
                 input_vec, target_vec = utils.assemble_input_target(
-                    ori, acc, pose, self.sens_ind
+                    ori, acc, pose, self.sens_ind, self.stats
                 )
                 self.training_step(
                     epoch,
@@ -265,7 +283,7 @@ class Trainer:
         trgt_config = OmegaConf.create()
         trgt_config.experiment = train_config
         trgt_config.hyperparameters = self.hyper_params
-        trgt_config.dataset = self.ds_config
+        # trgt_config.dataset = self.ds_config
 
         utils.write_config(path=self.model_path, config=trgt_config)
 
@@ -360,7 +378,7 @@ class Trainer:
             for sample, (ori, acc, pose, _) in enumerate(self.valid_dl):
 
                 input_vec, target_vec = utils.assemble_input_target(
-                    ori, acc, pose, self.sens_ind
+                    ori, acc, pose, self.sens_ind, self.stats
                 )
                 x, y = (
                     input_vec.to(self.device).float(),
@@ -411,16 +429,16 @@ def do_training(cfg: DictConfig):
         # shutil.rmtree(trainer.model_path)
         sys.exit()
 
-    # evaluate trained model right away
+    # load default evaluation configuration
     eval_cfg_path = os.path.join(
         utils.get_project_folder(), "learning/conf/evaluation.yaml"
     )
     eval_cfg = OmegaConf.load(eval_cfg_path)
+    # adapt evaluation dataset to training dataset
     eval_cfg.evaluation.experiment = trainer.experiment_name
-    eval_cfg.evaluation.dataset = cfg.experiment.dataset
+    eval_cfg.evaluation.eval_dataset = cfg.experiment.train_dataset
     # keep debugging and noise flag but force without visualization
     eval_cfg.debug = cfg.debug
-    eval_cfg.noise = cfg.experiment.noise
     eval_cfg.visualize = False
     eval = Evaluator(cfg=eval_cfg)
     eval.evaluate()

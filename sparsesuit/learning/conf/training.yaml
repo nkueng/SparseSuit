@@ -1,4 +1,5 @@
 debug: False
+train_on_processed: False
 defaults:
   - experiment: SSP_baseline
   - hyperparams: default

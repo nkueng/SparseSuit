@@ -1,12 +1,19 @@
 evaluation:
-  experiment: 2108251857-minimal_inner
-  dataset: synthetic
-  noise: False
+  experiment: 2110191644-debug
   past_frames: 20
   future_frames: 5
   pos_err: False
-debug: False
-visualize: False
+  eval_dataset:
+    source: AMASS
+    sensor_config: SSP
+    fps: 100
+    synthesis:
+      acc_noise: 0
+      gyro_noise: 0
+      acc_delta: 4
+
+debug: True
+visualize: True
 
 hydra:
   run:

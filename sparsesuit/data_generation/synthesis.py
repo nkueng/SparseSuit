@@ -8,7 +8,7 @@ from pathlib import Path
 import hydra
 import numpy as np
 import torch
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from normalization import Normalizer
 from sparsesuit.constants import paths, sensors
@@ -18,10 +18,13 @@ from sparsesuit.utils import smpl_helpers, utils
 class Synthesizer:
     def __init__(self, cfg):
         self.cfg = cfg
+
         # synthesis parameters
-        self.sens_config = cfg.dataset.config
-        self.acc_delta = cfg.dataset.acc_delta
-        self.acc_noise = cfg.dataset.acc_noise
+        self.ds_config = cfg.dataset
+        self.sens_config = cfg.dataset.sensor_config
+        self.acc_delta = cfg.dataset.synthesis.acc_delta
+        self.acc_noise = cfg.dataset.synthesis.acc_noise
+        self.gyro_noise = cfg.dataset.synthesis.gyro_noise
         self.add_noise = self.acc_noise > 0
         self.fps = cfg.dataset.fps
 
@@ -30,32 +33,33 @@ class Synthesizer:
         self.debug = cfg.debug
         self.skip_existing = False if cfg.debug else cfg.skip_existing
 
-        # set internal params depending on config params
-        self.src_dir = paths.AMASS_PATH
+        # evaluate config params
+        src_ds = self.ds_config.source
+        self.src_dir = os.path.join(paths.SOURCE_PATH, src_ds)
 
         if self.debug:
             self.src_dir += "_debug"
 
-        # choose params depending on suit and sensor configuration
+        # figure out suit and sensor configuration
         if self.sens_config == "SSP":
-            target_name = self.src_dir + "_SSP"
+            # target_name = self.src_dir + "_SSP"
             self.sens_names = sensors.SENS_NAMES_SSP
             self.sens_vert_ids = list(sensors.SENS_VERTS_SSP.values())
 
         elif self.sens_config == "MVN":
-            target_name = self.src_dir + "_MVN"
+            # target_name = self.src_dir + "_MVN"
             self.sens_names = sensors.SENS_NAMES_MVN
             self.sens_vert_ids = list(sensors.SENS_VERTS_MVN.values())
 
         else:
             raise NameError("Invalid sensor configuration. Aborting!")
 
-        if self.add_noise:
-            target_name += "_noisy"
+        # if self.add_noise:
+        #     target_name += "_noisy"
 
-        target_name += "_acc" + str(self.acc_delta)
+        # target_name += "_acc" + str(self.acc_delta)
 
-        self.trgt_dir = target_name
+        self.trgt_dir = utils.ds_path_from_config(cfg.dataset, self.debug)
         self.joint_ids = [sensors.SENS_JOINTS_IDS[sensor] for sensor in self.sens_names]
 
         # logger setup
@@ -122,15 +126,16 @@ class Synthesizer:
     def write_config(self):
         # save configuration file for synthetic dataset
         dataset_info = {
+            **self.ds_config,
             "sequences": self.asset_counter,
-            "config": self.sens_config,
-            "type": "synthetic",
-            "fps": self.fps,
-            "acc_noise": self.acc_noise,
-            "acc_delta": self.acc_delta,
-            "count": len(self.sens_names),
-            "sensors": self.sens_names,
-            "vert_ids": self.sens_vert_ids,
+            # "sensor_config": self.sens_config,
+            # "type": "synthetic",
+            # "fps": self.fps,
+            # "acc_noise": self.acc_noise,
+            # "acc_delta": self.acc_delta,
+            "sensor_count": len(self.sens_names),
+            "sensor_names": self.sens_names,
+            "sensor_vertices": self.sens_vert_ids,
             # "joint_ids": self.joint_ids,
         }
         ds_config = {
@@ -344,7 +349,7 @@ class Synthesizer:
             elif t_b == t:
                 tmp_pose = b
             else:
-                tmp_pose = a + (b - a) * ((t_b - t) / (t_b - t_a))
+                tmp_pose = a + ((t - t_a) * (b - a) / (t_b - t_a))
             poses.append(tmp_pose)
 
         return np.asarray(poses)
@@ -355,7 +360,16 @@ def do_synthesis(cfg: DictConfig):
     syn = Synthesizer(cfg=cfg)
     syn.synthesize_dataset()
 
-    norm = Normalizer(cfg=cfg)
+    # load default config for normalization
+    norm_cfg_path = os.path.join(
+        utils.get_project_folder(), "data_generation/conf/normalization.yaml"
+    )
+    norm_cfg = OmegaConf.load(norm_cfg_path)
+    # adapt default config to synthesis configuration
+    norm_cfg.dataset = cfg.dataset
+    norm_cfg.debug = cfg.debug
+    # run normalization with adapted configuration
+    norm = Normalizer(cfg=norm_cfg)
     norm.normalize_dataset()
 
 

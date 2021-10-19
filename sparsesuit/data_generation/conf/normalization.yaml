@@ -1,12 +1,15 @@
 dataset:
-  config: MVN
-  type: synthetic
-  acc_delta: 1
-  noise: False
-  tar: False
+  source: AMASS
+  sensor_config: SSP
+  fps: 100
+  synthesis:
+    acc_noise: 0
+    gyro_noise: 0
+    acc_delta: 4
+
 train_chunk_len: 300
-del_interm: False
 visualize: False
+skip_existing: True
 debug: False
 
 hydra:

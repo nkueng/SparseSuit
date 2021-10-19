@@ -1,7 +1,9 @@
-name: SSP_baseline
-config: SSP
-count: 19
+name: SSP_baseline_future
+
 sensors:
+  sensor_config: SSP
+  sensor_count: 19
+  names:
   - left_back
   - right_back
   - left_collar
@@ -19,6 +21,12 @@ sensors:
   - right_knee
   - left_ankle
   - right_ankle
-dataset: synthetic
-noise: False
 
+train_dataset:
+  source: AMASS
+  sensor_config: SSP
+  fps: 100
+  synthesis:
+    acc_noise: 0
+    gyro_noise: 0
+    acc_delta: 4

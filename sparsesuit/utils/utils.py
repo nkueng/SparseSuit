@@ -13,6 +13,8 @@ import torch
 from omegaconf import OmegaConf
 from torch.utils.data import Dataset
 
+from sparsesuit.constants import paths
+
 
 def write_config(path, config):
     conf_file = os.path.join(path, "config.yaml")
@@ -24,6 +26,40 @@ def write_config(path, config):
 def load_config(path, file_name="config.yaml"):
     conf_file = os.path.join(path, file_name)
     return OmegaConf.load(conf_file)
+
+
+def ds_path_from_config(cfg, debug=False):
+    # if "dataset" in config:
+    #     cfg = config.dataset
+    # else:
+    #     return None
+
+    path = os.path.join(paths.DATASET_PATH, cfg.source)
+    params = [cfg.sensor_config, "fps" + str(cfg.fps)]
+
+    if "synthesis" in cfg:
+        # get all parameters related to synthesis
+        syn_params = cfg.synthesis
+        params.append("accn" + str(syn_params.acc_noise))
+        params.append("gyron" + str(syn_params.gyro_noise))
+        params.append("accd" + str(syn_params.acc_delta))
+
+    if debug:
+        params.append("debug")
+
+    # make into one string
+    ds_name = "_".join(params)
+
+    path = os.path.join(path, ds_name)
+    return path
+
+
+def true_in_dict(arg, dict):
+    if arg in dict:
+        if dict[arg]:
+            return True
+    else:
+        return False
 
 
 def str2gender(string):
@@ -51,6 +87,12 @@ def configure_logger(name, log_path="logs/", level=logging.INFO):
     # make logger output to console
     logger.addHandler(logging.StreamHandler(sys.stdout))
     return logger
+
+
+def close_logger(logger):
+    handlers = logger.handlers[:]
+    for handler in handlers:
+        handler.close()
 
 
 def aa_to_rot_matrix(data):
@@ -85,7 +127,16 @@ def rot_matrix_to_aa(data):
     return np.reshape(data_c, [seq_length, n_joints * 3])
 
 
-def assemble_input_target(orientation, acceleration, pose, sens_ind):
+def assemble_input_target(orientation, acceleration, pose, sens_ind, stats):
+    if len(stats) != 0:
+        # scale data for zero mean and unit variance
+        orientation -= stats["ori_mean"]
+        orientation /= stats["ori_std"]
+        acceleration -= stats["acc_mean"]
+        acceleration /= stats["acc_std"]
+        pose -= stats["pose_mean"]
+        pose /= stats["pose_std"]
+
     oris = np.reshape(orientation, [orientation.shape[0], orientation.shape[1], -1, 9])
     accs = np.reshape(
         acceleration, [acceleration.shape[0], acceleration.shape[1], -1, 3]

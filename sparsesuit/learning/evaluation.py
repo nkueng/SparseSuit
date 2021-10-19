@@ -18,6 +18,7 @@ from sparsesuit.utils import utils, smpl_helpers
 
 class Evaluator:
     def __init__(self, cfg):
+        # load evaluation parameters
         self.eval_config = cfg.evaluation
         self.visualize = cfg.visualize
         self.past_frames = self.eval_config.past_frames
@@ -45,9 +46,15 @@ class Evaluator:
             # device=self.device,
         )
 
-        # setup model
-        self.pred_trgt_joints = self.train_config.dataset.pred_trgt_joints
-        num_input_sens = len(self.train_config.experiment.sensors)
+        # load and setup trained model
+        exp_config = self.train_config.experiment
+        train_ds_path = utils.ds_path_from_config(exp_config.train_dataset, cfg.debug)
+        train_ds_path += "_n"
+        train_ds_config = utils.load_config(train_ds_path).dataset
+        self.pred_trgt_joints = train_ds_config.pred_trgt_joints
+        self.vert_ids = train_ds_config.sensor_vertices
+        input_sensor_names = exp_config.sensors.names
+        num_input_sens = len(input_sensor_names)
         ori_dim = num_input_sens * 9
         acc_dim = num_input_sens * 3
         self.pose_dim = len(self.pred_trgt_joints) * 9
@@ -62,48 +69,48 @@ class Evaluator:
         self.model.load_state_dict(torch.load(model_path, map_location=self.device))
         self.model.eval()
 
-        # load appropriate dataset for evaluation
-        self.suit_config = self.train_config.experiment.config
-        if self.eval_config.dataset == "synthetic":
-            ds_dir = paths.AMASS_PATH
+        self.sensor_config = self.train_config.experiment.sensors.sensor_config
+        # ds_dir = utils.ds_path_from_config(cfg.evaluation, cfg.debug)
+        # if self.eval_config.dataset == "synthetic":
+        #     ds_dir = paths.AMASS_PATH
+        #
+        #     if cfg.debug:
+        #         ds_dir += "_debug"
+        #
+        #     if self.sensor_config == "SSP":
+        #         ds_dir += "_SSP"
+        #
+        #     elif self.sensor_config == "MVN":
+        #         ds_dir += "_MVN"
+        #
+        #     else:
+        #         raise NameError("Invalid configuration. Aborting!")
+        #
+        #     if self.eval_config.noise:
+        #         ds_dir += "_noisy"
+        #     ds_dir += "_nn"
 
-            if cfg.debug:
-                ds_dir += "_debug"
+        # elif self.eval_config.dataset == "real":
+        #
+        #     if self.sensor_config == "MVN":
+        #         ds_dir = paths.DIP_17_NN_PATH
+        #
+        #     elif self.sensor_config == "SSP":
+        #         ds_dir = paths.RKK_STUDIO_19_NN_PATH
+        #
+        #     else:
+        #         raise NameError("Invalid configuration. Aborting!")
 
-            if self.suit_config == "SSP":
-                ds_dir += "_SSP"
-
-            elif self.suit_config == "MVN":
-                ds_dir += "_MVN"
-
-            else:
-                raise NameError("Invalid configuration. Aborting!")
-
-            if self.eval_config.noise:
-                ds_dir += "_noisy"
-            ds_dir += "_nn"
-
-        elif self.eval_config.dataset == "real":
-
-            if self.suit_config == "MVN":
-                ds_dir = paths.DIP_17_NN_PATH
-
-            if self.suit_config == "SSP":
-                ds_dir = paths.RKK_STUDIO_19_NN_PATH
-
-            else:
-                raise NameError("Invalid configuration. Aborting!")
-
-        # get test dataset paths
-        test_ds_path = os.path.join(ds_dir, "test")
-
+        # get evaluation dataset
+        ds_dir = utils.ds_path_from_config(cfg.evaluation.eval_dataset, cfg.debug)
+        ds_dir += "_n"
         test_ds_config = utils.load_config(ds_dir).dataset
-        test_ds_size = test_ds_config.assets.test
+        test_ds_size = test_ds_config.normalized_assets.test
         self.ds_fps = test_ds_config.fps
 
-        # get indices of sensors the model was trained with in evaluation dataset
-        test_ds_sens = test_ds_config.sensors
-        train_sens = self.train_config.experiment.sensors
+        # get indices of sensors the model was trained with
+        test_ds_sens = test_ds_config.normalized_sensors
+        train_sens = self.train_config.experiment.sensors.names
         self.sens_ind = [test_ds_sens.index(sens) for sens in train_sens]
         # sens_ind_mask = [sens in train_sens for sens in test_ds_sens]
         # sens_ind_alt = [
@@ -113,9 +120,10 @@ class Evaluator:
         # load test dataset statistics
         stats_path = os.path.join(ds_dir, "stats.npz")
         with np.load(stats_path, allow_pickle=True) as data:
-            stats = dict(data)
-        self.pose_mean, self.pose_std = stats["pose_mean"], stats["pose_std"]
+            self.stats = dict(data)
+        self.pose_mean, self.pose_std = self.stats["pose_mean"], self.stats["pose_std"]
 
+        test_ds_path = os.path.join(ds_dir, "test")
         test_ds = utils.BigDataset(test_ds_path, test_ds_size)
         self.test_dl = DataLoader(test_ds, num_workers=4, pin_memory=True)
 
@@ -132,21 +140,19 @@ class Evaluator:
 
         # iterate over test dataset
         with torch.no_grad():
-            for batch_num, (ori, acc, pose_trgt_norm, filename) in enumerate(
-                self.test_dl
-            ):
+            for batch_num, (ori, acc, pose_trgt, filename) in enumerate(self.test_dl):
                 # get ang err statistics for this asset
                 stats_ang_err_asset = Welford()
 
                 self.logger.info(
-                    "computing metrics on asset {} with {} frames".format(
+                    "Computing metrics for asset {} with {} frames.".format(
                         batch_num, ori.shape[1]
                     )
                 )
 
                 # load input and target
                 input_vec, target_vec = utils.assemble_input_target(
-                    ori, acc, pose_trgt_norm, self.sens_ind
+                    ori, acc, pose_trgt, self.sens_ind, self.stats
                 )
 
                 # predict SMPL pose params online or offline depending on past_/future_frames
@@ -168,12 +174,13 @@ class Evaluator:
                 self.logger.debug("Loss: {:.2f}".format(loss))
 
                 # extract poses from predictions
-                pose_pred_norm = utils.copy2cpu(pred_mean[:, :, : self.pose_dim])
+                pose_pred = utils.copy2cpu(pred_mean[:, :, : self.pose_dim])
+
                 # undo normalization of SMPL predictions and targets
-                pose_pred = pose_pred_norm * self.pose_std + self.pose_mean
-                pose_trgt = (
-                    utils.copy2cpu(pose_trgt_norm) * self.pose_std + self.pose_mean
-                )
+                pose_pred = pose_pred * self.pose_std + self.pose_mean
+                # pose_trgt = (
+                #         utils.copy2cpu(pose_trgt) * self.pose_std + self.pose_mean
+                # )
 
                 # expand reduced (15/19 joints) to full 24 smpl joints
                 pose_pred_full = [
@@ -182,7 +189,7 @@ class Evaluator:
                 ]
                 pose_trgt_full = [
                     smpl_helpers.smpl_reduced_to_full(p, self.pred_trgt_joints)
-                    for p in pose_trgt
+                    for p in utils.copy2cpu(pose_trgt)
                 ]
 
                 # keep track of predicted poses for saving later
@@ -218,7 +225,7 @@ class Evaluator:
 
         # save predicted poses with model
         file_name = "predictions.npz"
-        if self.eval_config.dataset == "real":
+        if self.eval_config.eval_dataset != "AMASS":
             file_name = "real_predictions.npz"
         poses_filename = os.path.join(self.exp_path, file_name)
         with open(poses_filename, "wb") as fout:
@@ -335,7 +342,7 @@ class Evaluator:
         trgt_config.experiment = self.train_config.experiment
         trgt_config.hyperparameters = self.train_config.hyperparameters
         trgt_config.evaluation = eval_config
-        trgt_config.dataset = self.train_config.dataset
+        # trgt_config.dataset = self.train_config.experiment.train_dataset
 
         utils.write_config(path=self.exp_path, config=trgt_config)
 
@@ -470,12 +477,12 @@ class Evaluator:
             joints = [targ_joints_np, np.asarray(pred_joints_aligned)]
 
             # show vertex indices of sensors used in training
-            root_ids = [0, 1] if self.suit_config == "SSP" else [0]
+            root_ids = [0, 1] if self.sensor_config == "SSP" else [0]
             train_sens_ids = root_ids + [ind + len(root_ids) for ind in self.sens_ind]
-            sens_verts = self.train_config.dataset.vert_ids
+            sens_verts = self.vert_ids
             train_sens_verts = [sens_verts[idx] for idx in train_sens_ids]
             sensors_vis = [
-                pred_verts_aligned[:, train_sens_verts],
+                np.asarray(pred_verts_aligned)[:, train_sens_verts],
             ]
 
             visualization.vis_smpl(
