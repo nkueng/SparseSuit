@@ -1,27 +1,27 @@
 defaults:
   - default
 
-name: eval_gt_overlay_MVN_real
-source: DIP_IMU_17_nn
+name: eval_gt_overlay_SSP_real
+description: evaluation of models trained on real data on a real dataset
+source: RKK_19_nn
 models:
-  - 2110071209-MVN_baseline_real
-  - 2110021848-MVN_baseline
-  - 2110021917-MVN_DIP
+  - 2110171431-SSP_baseline_real
+
 assets:
 # [asset_idx, frame_idx]
-  - [0, 340]  # lifting arm
-  - [2, 1400]  # stretching out arms
-  - [3, 870]  # leg raise
-  - [7, 300]  # jumping jacks
-  - [10, 200]  # rotating arms
-  - [11, 1160]  # raising arms
-  - [12, 2400] # squatting
-  - [13, 300]  # walking (sideways?)
+  - [1, 500]  # gait
+  - [7, 1400]  # gait
+  - [12, 870]  # run
+  - [19, 300]  # run
+  - [23, 600]  # sidestep
+  - [24, 1160]  # sidestep
+  - [32, 300] # sway
+  - [38, 1100]  # sway
 body_transparency: 0.0
 show_from_behind: False
 use_default_pose: False
 show_sensors: True
-sensor_config: MVN
+sensor_config: SSP
 real_data: True
 show_vertex_distance: False
 show_gt: True

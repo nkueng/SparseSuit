@@ -1,8 +1,9 @@
 defaults:
   - default
 
-name: eval_gt_overlay
-source: AMASS_SSP_nn
+name: eval_gt_overlay_real
+description: evaluation of models trained on synthetic data on a real dataset
+source: RKK_19_nn
 models:
   - 2108251857-minimal_outer
   - 2109291940-11_a
@@ -11,27 +12,29 @@ models:
   - 2109292240-SSP_baseline
 assets:
 # [asset_idx, frame_idx]
-  - [1, 200]  # throwing
-  - [5, 100]  # side steps
-  - [7, 1080]  # bending arms
-  - [8, 100]  # sitting
-  - [15, 500]  # dancing
-  - [20, 100]  # simple walking
-  - [27, 2920]  # walking and rotating arms
+  - [1, 500]  # gait
+  - [7, 1400]  # gait
+  - [12, 870]  # run
+  - [19, 300]  # run
+  - [23, 600]  # sidestep
+  - [24, 1160]  # sidestep
+  - [32, 300] # sway
+  - [38, 1100]  # sway
 body_transparency: 0.0
 show_from_behind: False
 use_default_pose: False
 show_sensors: True
 sensor_config: SSP
+real_data: True
 show_vertex_distance: False
 show_gt: True
 render_frames: 5
 render_every_n_frame: 20
-show_rendering: True
+show_rendering: False
 orthographic_camera: True
 camera_translation: [0, 0.5, 1.75]
 render_width: 800
-make_gif: False
+make_gif: True
 gif_fps: 15
 
 
