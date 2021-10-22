@@ -1,4 +1,5 @@
 debug: False
+gpu: True
 defaults:
  - experiment: SSP_baseline
  - hyperparams: default
