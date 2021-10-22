@@ -1,15 +1,15 @@
 dataset:
-  source: AMASS
+  source: RKK_STUDIO
   sensor_config: SSP
   fps: 100
-  synthesis:
-    acc_noise: 0
-    gyro_noise: 0
-    acc_delta: 4
+#  synthesis:
+#    acc_noise: 0
+#    gyro_noise: 0
+#    acc_delta: 4
 
 train_chunk_len: 300
 visualize: False
-skip_existing: True
+skip_existing: False
 debug: False
 
 hydra:

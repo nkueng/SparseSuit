@@ -28,15 +28,22 @@ def load_config(path, file_name="config.yaml"):
     return OmegaConf.load(conf_file)
 
 
-def ds_path_from_config(cfg, debug=False):
+def ds_path_from_config(cfg, caller, debug=False):
     # if "dataset" in config:
     #     cfg = config.dataset
     # else:
     #     return None
 
-    path = os.path.join(paths.DATASET_PATH, cfg.source)
-    params = [cfg.sensor_config, "fps" + str(cfg.fps)]
+    if caller in ["synthesis", "normalization"]:
+        path = os.path.join(paths.SOURCE_PATH, cfg.source)
 
+    elif caller in ["training", "evaluation"]:
+        path = os.path.join(paths.DATASET_PATH, cfg.source)
+
+    else:
+        raise AttributeError("Invalid argument for caller. Aborting!")
+
+    params = [cfg.sensor_config, "fps" + str(cfg.fps)]
     if "synthesis" in cfg:
         # get all parameters related to synthesis
         syn_params = cfg.synthesis
@@ -199,7 +206,7 @@ def remove_scaling(rotations):
 class BigDataset(Dataset):
     def __init__(self, path, length):
         self.path = path
-        self.folders = sorted(os.listdir(path))
+        self.assets = sorted(os.listdir(path))
         self.length = length
 
     def __len__(self):
@@ -207,9 +214,9 @@ class BigDataset(Dataset):
 
     def __getitem__(self, index):
         if 0 <= index < self.length:
-            item_path = os.path.join(self.path, self.folders[index])
-            filename = os.listdir(item_path)[0]
-            with np.load(os.path.join(item_path, filename), allow_pickle=True) as data:
+            item_path = os.path.join(self.path, self.assets[index])
+            filename = item_path.split("/")[-1].split(".npz")[0]
+            with np.load(os.path.join(item_path), allow_pickle=True) as data:
                 data_in = dict(data)
             return data_in["ori"], data_in["acc"], data_in["pose"], filename
         else:

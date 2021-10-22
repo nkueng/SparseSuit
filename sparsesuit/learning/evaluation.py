@@ -48,11 +48,12 @@ class Evaluator:
 
         # load and setup trained model
         exp_config = self.train_config.experiment
-        train_ds_path = utils.ds_path_from_config(exp_config.train_dataset, cfg.debug)
+        train_ds_path = utils.ds_path_from_config(
+            exp_config.train_dataset, "evaluation", cfg.debug
+        )
         train_ds_path += "_n"
         train_ds_config = utils.load_config(train_ds_path).dataset
         self.pred_trgt_joints = train_ds_config.pred_trgt_joints
-        self.vert_ids = train_ds_config.sensor_vertices
         input_sensor_names = exp_config.sensors.names
         num_input_sens = len(input_sensor_names)
         ori_dim = num_input_sens * 9
@@ -102,7 +103,9 @@ class Evaluator:
         #         raise NameError("Invalid configuration. Aborting!")
 
         # get evaluation dataset
-        ds_dir = utils.ds_path_from_config(cfg.evaluation.eval_dataset, cfg.debug)
+        ds_dir = utils.ds_path_from_config(
+            cfg.evaluation.eval_dataset, "evaluation", cfg.debug
+        )
         ds_dir += "_n"
         test_ds_config = utils.load_config(ds_dir).dataset
         test_ds_size = test_ds_config.normalized_assets.test
@@ -145,8 +148,8 @@ class Evaluator:
                 stats_ang_err_asset = Welford()
 
                 self.logger.info(
-                    "Computing metrics for asset {} with {} frames.".format(
-                        batch_num, ori.shape[1]
+                    "Computing metrics for asset {}: {} with {} frames.".format(
+                        batch_num, filename[0], ori.shape[1]
                     )
                 )
 
@@ -479,7 +482,10 @@ class Evaluator:
             # show vertex indices of sensors used in training
             root_ids = [0, 1] if self.sensor_config == "SSP" else [0]
             train_sens_ids = root_ids + [ind + len(root_ids) for ind in self.sens_ind]
-            sens_verts = self.vert_ids
+            if self.sensor_config == "SSP":
+                sens_verts = list(sensors.SENS_VERTS_SSP.values())
+            else:
+                sens_verts = list(sensors.SENS_VERTS_MVN.values())
             train_sens_verts = [sens_verts[idx] for idx in train_sens_ids]
             sensors_vis = [
                 np.asarray(pred_verts_aligned)[:, train_sens_verts],
@@ -491,10 +497,11 @@ class Evaluator:
                 vertex_colors=vertex_colors,
                 # joints=joints,
                 sensors=sensors_vis,
-                play_frames=300,
+                play_frames=500,
                 playback_speed=0.3,
                 add_captions=True,
                 side_by_side=False,
+                fps=self.ds_fps,
             )
 
         return mm * 100, pred_joints_sel  # convert m to cm

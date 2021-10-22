@@ -19,17 +19,18 @@ def vis_smpl(
     add_captions: bool = False,
     side_by_side: bool = False,
     pose: list = None,
+    fps: int = 60,
 ):
     """Displays play_frames number of frames of the given vertices with the given SMPL model."""
     # constants
-    fps = 60 * playback_speed
+    fps *= playback_speed
     num_models = len(vertices)
     num_vertices = vertices[0].shape[1]
     num_frames = vertices[0].shape[0]
     colors = {
         "yellow": [1, 1, 0, 0.8],  # raw prediction
         "orange": [1, 0.5, 0, 0.8],  # aligned prediction
-        "green": [0.17, 1, 0, 0.2],  # ground truth
+        "green": [0.17, 1, 0, 0.4],  # ground truth
         "black": [0, 0, 0, 0.8],  # black for text
         "gray": [0.7, 0.7, 0.7, 1],  # gray for prediction
     }
@@ -93,7 +94,7 @@ def vis_smpl(
                     )
                 else:
                     sens = creation.uv_sphere(radius=0.015)
-                # sens.visual.vertex_colors = [0, 0, 0, 1.0]
+                sens.visual.vertex_colors = colors["orange"]
                 tfs = np.tile(np.eye(4), (sensor.shape[1], 1, 1))
                 if oris is not None:
                     tfs[:, :3, :3] = oris[s][i]

@@ -18,8 +18,8 @@ def get_data(file_path):
 
 
 smpl_folder_options = {
-    "studio": "Export",
-    "optical": "Vicon",  # TODO: change once the data is here
+    "RKK_STUDIO": "Export",
+    "RKK_VICON": "Vicon",  # TODO: change once the data is here
 }
 
 use_motions = [
@@ -32,13 +32,16 @@ use_motions = [
 
 if __name__ == "__main__":
 
+    # specify which dataset to bundle
+    dataset = "RKK_STUDIO"
+
     # specify source and target directories
-    src_dir = os.path.join(paths.DATA_PATH, "raw_SSP_dataset/SSP_data")
-    smpl_folder = smpl_folder_options["studio"]
+    src_dir = os.path.join(paths.SOURCE_PATH, "raw_SSP_dataset")  # , "SSP_data")
+    smpl_folder = smpl_folder_options[dataset]
     ignore_folder = list(smpl_folder_options.values()).copy()
     ignore_folder.remove(smpl_folder)
     ignore_folder = ignore_folder[0]
-    trgt_dir = paths.RKK_STUDIO_19_PATH
+    trgt_dir = os.path.join(paths.SOURCE_PATH, dataset, "SSP_fps100")
 
     # crawl the source directory and find all relevant npz files
     sensor_files = []
@@ -126,15 +129,14 @@ if __name__ == "__main__":
         print("Bundled {}".format(file_id))
         success_counter += 1
 
-    # TODO: write config for this dataset
+    # write config for this dataset
     cfg = {
-        "sequences": success_counter,
-        "config": "SSP",
-        "type": "real",
-        "groundtruth": "studio",
+        "source": dataset,
+        "sensor_config": "SSP",
         "fps": 100,
-        "count": 19,
-        "sensors": sensors.SENS_NAMES_SSP,
+        "sequences": success_counter,
+        "sensor_count": 19,
+        "sensor_names": sensors.SENS_NAMES_SSP,
     }
     ds_cfg = {
         "dataset": cfg,

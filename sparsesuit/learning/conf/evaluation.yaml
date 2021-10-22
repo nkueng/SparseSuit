@@ -1,19 +1,19 @@
 evaluation:
-  experiment: 2110191644-debug
+  experiment: 2110191645-SSP_baseline_future
   past_frames: 20
   future_frames: 5
   pos_err: False
   eval_dataset:
-    source: AMASS
-    sensor_config: SSP
+    source: RKK_STUDIO
     fps: 100
-    synthesis:
-      acc_noise: 0
-      gyro_noise: 0
-      acc_delta: 4
+    sensor_config: SSP
+#    synthesis:
+#      acc_noise: 0
+#      gyro_noise: 0
+#      acc_delta: 4
 
-debug: True
-visualize: True
+debug: False
+visualize: False
 
 hydra:
   run:

@@ -18,24 +18,37 @@ from sparsesuit.utils import utils
 
 
 class Trainer:
-    def __init__(self, cfg):
+    def __init__(self, cfg, finetune=False):
         self.cfg = cfg
 
-        # TODO: add option for fine-tuning
-        # load pre-trained model
-        # make sure model I/O is the same as for first training
-
         # cuda setup
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        use_available_gpu = torch.cuda.is_available() and cfg.gpu
+        self.device = torch.device("cuda" if use_available_gpu else "cpu")
 
         # reproducibility
         utils.make_deterministic(14)
 
         # experiment setup
-        train_config = cfg.experiment
+        if finetune:
+            # load pre-trained model
+            exp_path = os.path.join(paths.RUN_PATH, cfg.experiment)
+            train_config = utils.load_config(exp_path).experiment
+            train_config.name += "_finetuned"
+            # make sure model I/O is the same as for finetuning and training
+            assert (
+                cfg.finetune_dataset.sensor_config
+                == train_config.train_dataset.sensor_config
+            )
+            assert cfg.finetune_dataset.fps == train_config.train_dataset.fps
+            # overwrite training with finetuning config
+            train_config.train_dataset = cfg.finetune_dataset
+            self.cfg.experiment = train_config
+        else:
+            train_config = cfg.experiment
+
+        ds_config = train_config.train_dataset
         self.exp_name = "debug" if cfg.debug else train_config.name
         train_sens = train_config.sensors.names
-        ds_config = train_config.train_dataset
         # num_train_sens = train_config.count
 
         # hyper-parameters
@@ -52,9 +65,12 @@ class Trainer:
 
         # find differences between this experiment and default hyperparams
         def_path = os.path.join(os.getcwd(), "conf/hyperparams")
-        config_name = (
-            "default.yaml" if ds_config.source == "AMASS" else "default_real.yaml"
-        )
+        if ds_config.source == "AMASS":
+            config_name = "default.yaml"
+        elif finetune:
+            config_name = "default_finetune.yaml"
+        else:
+            config_name = "default_real.yaml"
         hyperparams_def = utils.load_config(def_path, config_name)
         hyperparams_diff = {
             k: cfg.hyperparams[k]
@@ -84,12 +100,17 @@ class Trainer:
         self.logger = utils.configure_logger(
             name="training", log_path=self.model_path, level=log_level
         )
-        print("Training\n*******************\n")
+        if finetune:
+            print("Finetuning\n*******************\n")
+        else:
+            print("Training\n*******************\n")
         self.logger.info("Using {} device".format(self.device))
         self.logger.info(OmegaConf.to_yaml(cfg))
 
         # get dataset required by configuration
-        ds_dir = utils.ds_path_from_config(train_config.train_dataset, cfg.debug)
+        ds_dir = utils.ds_path_from_config(
+            train_config.train_dataset, "training", cfg.debug
+        )
         self.stats = {}
         if cfg.train_on_processed:
             ds_dir += "_nn"
@@ -100,6 +121,10 @@ class Trainer:
                 # load statistics
                 with np.load(stats_path) as stats_data:
                     self.stats = dict(stats_data)
+            else:
+                raise FileNotFoundError(
+                    "Can't find statistics file for this dataset. Aborting!"
+                )
 
         if cfg.debug:
             # ds_dir += "_debug"
@@ -161,6 +186,10 @@ class Trainer:
 
         # init network
         self.model = BiRNN(input_dim=input_dim, target_dim=target_dim).to(self.device)
+        if finetune:
+            # load pre-trained model
+            model_path = os.path.join(exp_path, "checkpoint.pt")
+            self.model.load_state_dict(torch.load(model_path, map_location=self.device))
         self.logger.info(
             "Trainable parameters: {}".format(count_parameters(self.model))
         )

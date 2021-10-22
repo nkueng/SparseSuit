@@ -22,10 +22,11 @@ class Synthesizer:
         # synthesis parameters
         self.ds_config = cfg.dataset
         self.sens_config = cfg.dataset.sensor_config
-        self.acc_delta = cfg.dataset.synthesis.acc_delta
-        self.acc_noise = cfg.dataset.synthesis.acc_noise
-        self.gyro_noise = cfg.dataset.synthesis.gyro_noise
-        self.add_noise = self.acc_noise > 0
+        synthesis_params = cfg.dataset.synthesis
+        self.acc_delta = synthesis_params.acc_delta
+        self.acc_noise = synthesis_params.acc_noise
+        self.gyro_noise = synthesis_params.gyro_noise
+        self.acc_saturation = synthesis_params.acc_saturation
         self.fps = cfg.dataset.fps
 
         # run parameters
@@ -59,7 +60,7 @@ class Synthesizer:
 
         # target_name += "_acc" + str(self.acc_delta)
 
-        self.trgt_dir = utils.ds_path_from_config(cfg.dataset, self.debug)
+        self.trgt_dir = utils.ds_path_from_config(cfg.dataset, "synthesis", self.debug)
         self.joint_ids = [sensors.SENS_JOINTS_IDS[sensor] for sensor in self.sens_names]
 
         # logger setup
@@ -90,6 +91,10 @@ class Synthesizer:
                 if file.startswith("."):
                     continue
                 if not file.endswith(".npz"):
+                    continue
+                if "SSP" in subdir:
+                    continue
+                if "MVN" in subdir:
                     continue
                 # assemble path of source file
                 file_path = os.path.join(subdir, file)
@@ -210,22 +215,12 @@ class Synthesizer:
     # Get orientation and acceleration from list of 4x4 matrices and vertices
     def get_ori_accel(self, rel_tfs, vertices_IMU):
         # extract IMU orientations from transformation matrices (in global frame)
-        # TODO: make orientations noisy
         oris = []
         for idx in self.joint_ids:
             oris.append(np.expand_dims(rel_tfs[:, idx, :3, :3], axis=1))
         orientation = np.concatenate(oris, axis=1)
 
-        # IMU sim for noise
-        if self.add_noise:
-            import pymusim
-
-            sensor_opt = pymusim.SensorOptions()
-            sensor_opt.set_gravity_axis(-1)  # disable additive gravity
-            sensor_opt.set_white_noise(self.acc_noise)
-            sensor = pymusim.BaseSensor(sensor_opt)
-
-        # compute accelerations from subsequent frames and add noise with IMUsim
+        # compute accelerations from subsequent frames
         acceleration = []
 
         time_interval = self.acc_delta / self.fps
@@ -237,12 +232,36 @@ class Synthesizer:
             accel_tmp = (vertex_2 + vertex_0 - 2 * vertex_1) / (
                 time_interval * time_interval
             )
-            if self.add_noise:
-                accel_tmp = np.array(sensor.transform_measurement(accel_tmp))
 
             acceleration.append(accel_tmp)
 
-        return orientation[self.acc_delta : -self.acc_delta], np.asarray(acceleration)
+        acceleration = np.array(acceleration)
+
+        # add noise to acc with IMUsim
+        if self.acc_noise > 0.0:
+            import pymusim
+
+            sensor_opt = pymusim.SensorOptions()
+            sensor_opt.set_gravity_axis(-1)  # disable additive gravity
+            sensor_opt.set_white_noise(self.acc_noise)
+            sensor = pymusim.BaseSensor(sensor_opt)
+
+            accel_vec = acceleration.reshape([-1, 3])
+            accel_tmp = np.array(sensor.transform_measurement(accel_vec))
+            acceleration = accel_tmp.reshape([-1, len(self.joint_ids), 3])
+
+        # clip acc at sensor saturation value
+        if self.acc_saturation is not None:
+            # convert from G to m/s²
+            max_norm = self.acc_saturation * 9.81
+            clip_coef = max_norm / (np.linalg.norm(acceleration, axis=2) + 1e-6)
+            need_clip = clip_coef < 1
+            if need_clip.any():
+                acceleration[need_clip] *= np.expand_dims(clip_coef[need_clip], axis=1)
+
+        # TODO: make orientations noisy
+
+        return orientation[self.acc_delta : -self.acc_delta], acceleration
 
     def compute_imu_data(self, gender, poses):
 

@@ -47,7 +47,7 @@ class Normalizer:
         utils.make_deterministic(14)
 
         # choose dataset folder based on params
-        src_folder = utils.ds_path_from_config(cfg.dataset, self.debug)
+        src_folder = utils.ds_path_from_config(cfg.dataset, "normalization", self.debug)
         if self.ds_source == "AMASS":
             # src_folder = paths.AMASS_PATH
             self.dataset_mapping = paths.AMASS_MAPPING
@@ -98,8 +98,14 @@ class Normalizer:
         #         src_folder += "_noisy"
 
         self.src_dir = src_folder
-        self.norm_dir = self.src_dir + "_n"
-        self.trgt_dir = self.src_dir + "_nn"
+        norm_folder = utils.ds_path_from_config(cfg.dataset, "training", self.debug)
+        self.norm_dir = norm_folder + "_n"
+        self.trgt_dir = norm_folder + "_nn"
+        # clean up target directories to avoid old leftovers
+        if os.path.isdir(self.norm_dir):
+            shutil.rmtree(self.norm_dir)
+        if os.path.isdir(self.trgt_dir):
+            shutil.rmtree(self.trgt_dir)
         self.dataset_names = ["training", "validation", "test"]
 
         # visualization setup
@@ -110,7 +116,7 @@ class Normalizer:
         # logger setup
         log_level = logging.DEBUG if cfg.debug else logging.INFO
         self.logger = utils.configure_logger(
-            name="normalization", log_path=self.trgt_dir, level=log_level
+            name="normalization", log_path=self.norm_dir, level=log_level
         )
         self.logger.info("\n\nNormalization\n*******************\n")
 
@@ -301,7 +307,7 @@ class Normalizer:
             self.stats_pose.add(pose_i)
 
     def determine_dataset(self, subject_i, motion_type_i):
-        # save DIP-IMU different from AMASS
+        # determine which dataset (training/validation/testing) this assets belongs to
         if len(self.dataset_mapping) == 0:
             # split AMASS into 96.8/3/0.2 training/validation/testing
             train_split = 0.968
@@ -314,15 +320,30 @@ class Normalizer:
             else:
                 dataset_name = self.dataset_names[2]
         else:
-            # DIP-IMU: distinguish training, evaluation and test set like authors did
             # check for subjects in test set
             dataset_name = self.dataset_mapping.get(subject_i)
             if dataset_name is None:
+                # check for gait sequences in RKK_STUDIO
+                if self.ds_source == "RKK_STUDIO":
+                    if "gait" in str.lower(motion_type_i):
+                        return "test"
+
                 # check for motion types in validation set
                 dataset_name = self.dataset_mapping.get(subject_i + "/" + motion_type_i)
                 if dataset_name is None:
-                    # if subject + motion_type is not in dict, it belongs to the training dataset
-                    dataset_name = "training"
+                    if self.ds_source == "AMASS":
+                        # split AMASS into 97/3 training/validation
+                        train_split = 0.97
+                        rand = np.random.random()
+                        if rand <= train_split:
+                            dataset_name = "training"
+                        else:
+                            dataset_name = "validation"
+                    else:
+                        # if subject + motion_type is not in dict, it belongs to the training dataset
+                        dataset_name = "training"
+                else:
+                    stop_here = True
 
         return dataset_name
 
@@ -362,10 +383,10 @@ class Normalizer:
 
             # save chunks and keep track of training asset count
             for chunk in chunked_data:
-                folder_name = str(self.seq_count_train).zfill(5)
-                folder_path = os.path.join(self.norm_dir, "training", folder_name)
+                folder_path = os.path.join(self.norm_dir, "training")
                 Path(folder_path).mkdir(parents=True, exist_ok=True)
-                out_name = os.path.join(folder_path, file_name)
+                prefix = str(self.seq_count_train).zfill(5)
+                out_name = os.path.join(folder_path, prefix + "_" + file_name)
                 with open(out_name, "wb") as fout:
                     np.savez_compressed(fout, **chunk)
                 self.seq_count_train += 1
@@ -373,22 +394,25 @@ class Normalizer:
         else:
             # this asset goes unchanged into valid or test dataset
             if dataset_name == "validation":
-                folder_name = str(self.seq_count_valid).zfill(5)
-                folder_path = os.path.join(self.norm_dir, "validation", folder_name)
+                folder_path = os.path.join(self.norm_dir, "validation")
                 Path(folder_path).mkdir(parents=True, exist_ok=True)
-                out_name = os.path.join(folder_path, file_name)
+                prefix = str(self.seq_count_valid).zfill(5)
+                out_name = os.path.join(folder_path, prefix + "_" + file_name)
                 with open(out_name, "wb") as fout:
                     np.savez_compressed(fout, **norm_data)
                     self.seq_count_valid += 1
 
             elif dataset_name == "test":
-                folder_name = str(self.seq_count_test).zfill(5)
-                folder_path = os.path.join(self.norm_dir, "test", folder_name)
+                folder_path = os.path.join(self.norm_dir, "test")
                 Path(folder_path).mkdir(parents=True, exist_ok=True)
-                out_name = os.path.join(folder_path, file_name)
+                prefix = str(self.seq_count_test).zfill(5)
+                out_name = os.path.join(folder_path, prefix + "_" + file_name)
                 with open(out_name, "wb") as fout:
                     np.savez_compressed(fout, **norm_data)
                 self.seq_count_test += 1
+
+            else:
+                raise NameError("dataset_name could not be found. Aborting!")
 
     def compute_dataset_stats(self):
         # check if stats were previously computed
@@ -436,6 +460,8 @@ class Normalizer:
             # determine name of file for normalized asset
             subject_i = file.split("/")[-2]
             motion_type_i = file.split("/")[-1].split(".")[0]
+            if self.ds_source == "AMASS":
+                motion_type_i = motion_type_i.split("_poses")[0]
             file_name = "_".join([subject_i, motion_type_i]) + ".npz"
 
             # figure out which kind of dataset this asset belongs to
@@ -444,7 +470,9 @@ class Normalizer:
             # save asset in corresponding dataset
             self.save_asset(norm_data, file_name, dataset_name)
 
-            self.logger.info("Normalized {}/{}".format(subject_i, motion_type_i))
+            self.logger.info(
+                "Normalized {}/{} for {}".format(subject_i, motion_type_i, dataset_name)
+            )
 
         # compute and save stats
         self.stats["ori_mean"] = self.stats_ori.mean
@@ -521,7 +549,7 @@ class Normalizer:
         self.compute_dataset_stats()
 
         # keeping this for legacy reasons
-        self.make_dataset_zero_mean_unit_variance()
+        # self.make_dataset_zero_mean_unit_variance()
 
     def write_config(self, train_count, valid_count, test_count):
         # load config of source dataset
