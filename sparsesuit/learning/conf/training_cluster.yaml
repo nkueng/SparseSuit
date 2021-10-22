@@ -1,6 +1,7 @@
 debug: False
 gpu: True
 train_on_processed: False
+use_stats: False
 defaults:
  - experiment: SSP_baseline
  - hyperparams: default

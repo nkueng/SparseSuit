@@ -117,14 +117,15 @@ class Trainer:
         else:
             ds_dir += "_n"
             stats_path = os.path.join(ds_dir, "stats.npz")
-            if os.path.isfile(stats_path):
-                # load statistics
-                with np.load(stats_path) as stats_data:
-                    self.stats = dict(stats_data)
-            else:
-                raise FileNotFoundError(
-                    "Can't find statistics file for this dataset. Aborting!"
-                )
+            if cfg.use_stats:
+                if os.path.isfile(stats_path):
+                    # load statistics
+                    with np.load(stats_path) as stats_data:
+                        self.stats = dict(stats_data)
+                else:
+                    raise FileNotFoundError(
+                        "Can't find statistics file for this dataset. Aborting!"
+                    )
 
         if cfg.debug:
             # ds_dir += "_debug"
@@ -268,7 +269,7 @@ class Trainer:
                     # early stopping
                     if valid_loss <= best_valid_loss:
                         # save model
-                        self.logger.debug("Saving model.")
+                        self.logger.info("Saving model.")
                         torch.save(
                             self.model.state_dict(),
                             self.model_path + "/checkpoint.pt",

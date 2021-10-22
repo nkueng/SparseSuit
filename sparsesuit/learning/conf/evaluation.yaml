@@ -13,6 +13,7 @@ evaluation:
 #      acc_delta: 4
 
 debug: False
+use_stats: False
 visualize: False
 
 hydra:

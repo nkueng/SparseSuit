@@ -121,10 +121,18 @@ class Evaluator:
         # ]
 
         # load test dataset statistics
-        stats_path = os.path.join(ds_dir, "stats.npz")
-        with np.load(stats_path, allow_pickle=True) as data:
-            self.stats = dict(data)
-        self.pose_mean, self.pose_std = self.stats["pose_mean"], self.stats["pose_std"]
+        if cfg.use_stats:
+            stats_path = os.path.join(ds_dir, "stats.npz")
+            with np.load(stats_path, allow_pickle=True) as data:
+                self.stats = dict(data)
+            self.pose_mean, self.pose_std = (
+                self.stats["pose_mean"],
+                self.stats["pose_std"],
+            )
+        else:
+            self.stats = {}
+            self.pose_mean = 0
+            self.pose_std = 1
 
         test_ds_path = os.path.join(ds_dir, "test")
         test_ds = utils.BigDataset(test_ds_path, test_ds_size)

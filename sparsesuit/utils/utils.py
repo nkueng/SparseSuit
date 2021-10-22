@@ -134,7 +134,7 @@ def rot_matrix_to_aa(data):
     return np.reshape(data_c, [seq_length, n_joints * 3])
 
 
-def assemble_input_target(orientation, acceleration, pose, sens_ind, stats):
+def assemble_input_target(orientation, acceleration, pose, sens_ind, stats={}):
     if len(stats) != 0:
         # scale data for zero mean and unit variance
         orientation -= stats["ori_mean"]
