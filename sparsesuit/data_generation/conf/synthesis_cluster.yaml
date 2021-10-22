@@ -1,12 +1,14 @@
 dataset:
-  config: SSP
-  type: synthetic
-  acc_delta: 4
-  noise: False
-  acc_noise: 0.0
-  fps: 60
+  source: AMASS
+  sensor_config: SSP
+  fps: 100
+  synthesis:
+    acc_noise: 0.0016
+    gyro_noise: 0
+    acc_delta: 4
+    acc_saturation: 8
   smpl_genders: [male, female]
-  tar: False
+
 visualize: False
 debug: False
 skip_existing: True
