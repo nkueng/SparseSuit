@@ -55,6 +55,8 @@ class Synthesizer:
         else:
             raise NameError("Invalid sensor configuration. Aborting!")
 
+        assert os.path.exists(self.src_dir)
+
         # if self.add_noise:
         #     target_name += "_noisy"
 
@@ -86,6 +88,7 @@ class Synthesizer:
 
     def synthesize_dataset(self):
         t0 = time.perf_counter()
+        file_list = []
         for subdir, dirs, files in os.walk(self.src_dir):
             for file in files:
                 if file.startswith("."):
@@ -96,32 +99,42 @@ class Synthesizer:
                     continue
                 if "MVN" in subdir:
                     continue
-                # assemble path of source file
-                file_path = os.path.join(subdir, file)
+                file_list.append(os.path.join(subdir, file))
+        file_list = sorted(file_list)
 
-                # assemble target path
-                curr_dir = subdir.split("/")[-1]
-                dataset_name = subdir.split(self.src_dir)[1].split("/")[1]
+        # iterate over all files
+        for file in file_list:
 
-                # DEBUG
-                # if dataset_name == 'ACCAD':
-                #     break
+            # assemble path of source file
+            # asset = file.split("/")[-1]
 
-                filename = (curr_dir + "_" + file).replace(" ", "")
-                target_dir = os.path.join(self.trgt_dir, dataset_name)
-                target_path = os.path.join(target_dir, filename)
+            # file_path = os.path.join(subdir, asset)
 
-                # skip this asset, if the target_path already exists
-                if self.skip_existing and os.path.exists(target_path):
-                    self.logger.info("Skipping existing {}.".format(file))
-                    self.asset_counter += 1
-                    continue
+            # assemble target path
+            # curr_dir = file.split(asset)[0].split("/")[-2]
 
-                # synthesize sensor data from this motion asset
-                Path(target_dir).mkdir(parents=True, exist_ok=True)
-                self.logger.info("Synthesizing {}.".format(file))
-                if self.synthesize_asset(file_path, target_path):
-                    self.asset_counter += 1
+            filename = file.split("/")[-2:]
+            filename = os.path.join(*filename).replace(" ", "").replace("/", "_")
+            dataset_name = file.split("/")[-3]
+
+            # DEBUG
+            # if dataset_name == 'ACCAD':
+            #     break
+
+            target_dir = os.path.join(self.trgt_dir, dataset_name)
+            target_path = os.path.join(target_dir, filename)
+
+            # skip this asset, if the target_path already exists
+            if self.skip_existing and os.path.exists(target_path):
+                self.logger.info("Skipping existing {}.".format(filename))
+                self.asset_counter += 1
+                continue
+
+            # synthesize sensor data from this motion asset
+            Path(target_dir).mkdir(parents=True, exist_ok=True)
+            self.logger.info("Synthesizing {}.".format(filename))
+            if self.synthesize_asset(file, target_path):
+                self.asset_counter += 1
 
         self.write_config()
         self.logger.info(
