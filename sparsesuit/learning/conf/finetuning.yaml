@@ -1,0 +1,22 @@
+experiment: 2110191645-SSP_baseline_future
+finetune_dataset:
+  source: RKK_STUDIO
+  sensor_config: SSP
+  fps: 100
+
+debug: False
+train_on_processed: False
+
+defaults:
+  - hyperparams: default_finetune
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  sweep:
+    dir: .
+    subdir: .

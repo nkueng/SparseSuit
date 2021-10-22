@@ -1,0 +1,5 @@
+name: finetune_SSP_baseline
+  experiment: 2108251857-minimal_inner
+
+finetune_dataset: synthetic
+
