@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 import hydra
+import submitit
 import numpy as np
 import torch
 from omegaconf import DictConfig, OmegaConf
@@ -391,6 +392,9 @@ class Synthesizer:
 
 @hydra.main(config_path="conf", config_name=syn_config_name)
 def do_synthesis(cfg: DictConfig):
+    if paths.ON_CLUSTER:
+        submitit.JobEnvironment()
+
     syn = Synthesizer(cfg=cfg)
     syn.synthesize_dataset()
 

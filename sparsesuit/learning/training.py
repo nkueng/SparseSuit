@@ -5,6 +5,7 @@ import sys
 import time
 
 import hydra
+import submitit
 import numpy as np
 import torch
 from omegaconf import DictConfig, OmegaConf
@@ -455,6 +456,9 @@ def count_parameters(model):
 
 @hydra.main(config_path="conf", config_name=train_config_name)
 def do_training(cfg: DictConfig):
+    if paths.ON_CLUSTER:
+        submitit.JobEnvironment()
+
     try:
         trainer = Trainer(cfg=cfg)
         trainer.train()
