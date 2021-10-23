@@ -23,16 +23,16 @@ def do_training(cfg: DictConfig):
         # shutil.rmtree(trainer.model_path)
         sys.exit()
 
-    # evaluate trained model right away
+    # load default evaluation configuration
     eval_cfg_path = os.path.join(
         utils.get_project_folder(), "learning/conf/evaluation.yaml"
     )
     eval_cfg = OmegaConf.load(eval_cfg_path)
+    # adapt evaluation dataset to training dataset
     eval_cfg.evaluation.experiment = trainer.experiment_name
-    eval_cfg.evaluation.dataset = cfg.experiment.dataset
+    eval_cfg.evaluation.eval_dataset = cfg.experiment.train_dataset
     # keep debugging and noise flag but force without visualization
     eval_cfg.debug = cfg.debug
-    eval_cfg.noise = cfg.experiment.noise
     eval_cfg.visualize = False
     eval = Evaluator(cfg=eval_cfg)
     eval.evaluate()
