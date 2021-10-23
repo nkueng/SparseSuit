@@ -121,7 +121,7 @@ class Evaluator:
         # ]
 
         # load test dataset statistics
-        if cfg.use_stats:
+        if self.train_config.hyperparameters.use_stats:
             stats_path = os.path.join(ds_dir, "stats.npz")
             with np.load(stats_path, allow_pickle=True) as data:
                 self.stats = dict(data)

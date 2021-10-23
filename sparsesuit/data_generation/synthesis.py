@@ -14,6 +14,8 @@ from normalization import Normalizer
 from sparsesuit.constants import paths, sensors
 from sparsesuit.utils import smpl_helpers, utils
 
+syn_config_name = "synthesis_cluster" if paths.ON_CLUSTER else "synthesis"
+
 
 class Synthesizer:
     def __init__(self, cfg):
@@ -387,7 +389,7 @@ class Synthesizer:
         return np.asarray(poses)
 
 
-@hydra.main(config_path="conf", config_name="synthesis")
+@hydra.main(config_path="conf", config_name=syn_config_name)
 def do_synthesis(cfg: DictConfig):
     syn = Synthesizer(cfg=cfg)
     syn.synthesize_dataset()

@@ -16,6 +16,8 @@ from sparsesuit.constants import paths
 from sparsesuit.learning.evaluation import Evaluator
 from sparsesuit.utils import utils
 
+train_config_name = "training_cluster" if paths.ON_CLUSTER else "training"
+
 
 class Trainer:
     def __init__(self, cfg, finetune=False):
@@ -60,6 +62,7 @@ class Trainer:
         self.grad_clip_norm = self.hyper_params.grad_clip_norm
         self.init_lr = self.hyper_params.initial_learning_rate
         self.shuffle = self.hyper_params.shuffle
+        self.use_stats = self.hyper_params.use_stats
         self.num_workers = self.hyper_params.num_workers
         self.pin_memory = self.hyper_params.pin_memory
 
@@ -117,7 +120,7 @@ class Trainer:
         else:
             ds_dir += "_n"
             stats_path = os.path.join(ds_dir, "stats.npz")
-            if cfg.use_stats:
+            if self.use_stats:
                 if os.path.isfile(stats_path):
                     # load statistics
                     with np.load(stats_path) as stats_data:
@@ -449,7 +452,7 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-@hydra.main(config_path="conf", config_name="training")
+@hydra.main(config_path="conf", config_name=train_config_name)
 def do_training(cfg: DictConfig):
     try:
         trainer = Trainer(cfg=cfg)

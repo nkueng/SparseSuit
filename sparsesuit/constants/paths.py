@@ -3,6 +3,8 @@ import os
 
 # platform check
 ON_MAC = platform.system() == "Darwin"
+ON_LINUX = False
+ON_CLUSTER = False
 
 # macOS dir
 MAC_DATA_PATH = "/Volumes/SSD500/thesis_data"
@@ -16,8 +18,10 @@ if ON_MAC:
     DATA_PATH = MAC_DATA_PATH
 elif platform.node() == "nic-RKK":
     DATA_PATH = LINUX_DATA_PATH
+    ON_LINUX = True
 else:
     DATA_PATH = CLUSTER_DATA_PATH
+    ON_CLUSTER = True
 
 # source data path
 SOURCE_PATH = os.path.join(DATA_PATH, "source_data")
