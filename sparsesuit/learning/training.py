@@ -62,6 +62,7 @@ class Trainer:
         self.grad_clip_norm = self.hyper_params.grad_clip_norm
         self.init_lr = self.hyper_params.initial_learning_rate
         self.shuffle = self.hyper_params.shuffle
+        self.train_on_processed = self.hyper_params.train_on_processed
         self.use_stats = self.hyper_params.use_stats
         self.num_workers = self.hyper_params.num_workers
         self.pin_memory = self.hyper_params.pin_memory
@@ -115,7 +116,7 @@ class Trainer:
             train_config.train_dataset, "training", cfg.debug
         )
         self.stats = {}
-        if cfg.train_on_processed:
+        if self.train_on_processed:
             ds_dir += "_nn"
         else:
             ds_dir += "_n"

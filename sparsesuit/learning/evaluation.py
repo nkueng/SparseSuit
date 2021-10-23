@@ -51,7 +51,10 @@ class Evaluator:
         train_ds_path = utils.ds_path_from_config(
             exp_config.train_dataset, "evaluation", cfg.debug
         )
-        train_ds_path += "_n"
+        if self.train_config.hyperparameters.train_on_processed:
+            train_ds_path += "_nn"
+        else:
+            train_ds_path += "_n"
         train_ds_config = utils.load_config(train_ds_path).dataset
         self.pred_trgt_joints = train_ds_config.pred_trgt_joints
         input_sensor_names = exp_config.sensors.names
@@ -106,7 +109,22 @@ class Evaluator:
         ds_dir = utils.ds_path_from_config(
             cfg.evaluation.eval_dataset, "evaluation", cfg.debug
         )
-        ds_dir += "_n"
+        if self.train_config.hyperparameters.train_on_processed:
+            ds_dir += "_nn"
+            self.stats = {}
+            self.pose_mean = 0
+            self.pose_std = 1
+        else:
+            ds_dir += "_n"
+            # load test dataset statistics
+            if self.train_config.hyperparameters.use_stats:
+                stats_path = os.path.join(ds_dir, "stats.npz")
+                with np.load(stats_path, allow_pickle=True) as data:
+                    self.stats = dict(data)
+                self.pose_mean, self.pose_std = (
+                    self.stats["pose_mean"],
+                    self.stats["pose_std"],
+                )
         test_ds_config = utils.load_config(ds_dir).dataset
         test_ds_size = test_ds_config.normalized_assets.test
         self.ds_fps = test_ds_config.fps
@@ -119,20 +137,6 @@ class Evaluator:
         # sens_ind_alt = [
         #     item.index() for keep, item in zip(sens_ind_mask, test_ds_sens) if keep
         # ]
-
-        # load test dataset statistics
-        if self.train_config.hyperparameters.use_stats:
-            stats_path = os.path.join(ds_dir, "stats.npz")
-            with np.load(stats_path, allow_pickle=True) as data:
-                self.stats = dict(data)
-            self.pose_mean, self.pose_std = (
-                self.stats["pose_mean"],
-                self.stats["pose_std"],
-            )
-        else:
-            self.stats = {}
-            self.pose_mean = 0
-            self.pose_std = 1
 
         test_ds_path = os.path.join(ds_dir, "test")
         test_ds = utils.BigDataset(test_ds_path, test_ds_size)
