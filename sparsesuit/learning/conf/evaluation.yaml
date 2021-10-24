@@ -1,5 +1,5 @@
 evaluation:
-  experiment: 2110191645-SSP_baseline_future
+  experiment: 2110221618-SSP_baseline
   past_frames: 20
   future_frames: 5
   pos_err: False
@@ -14,6 +14,7 @@ evaluation:
 
 debug: False
 visualize: False
+gpu: True
 
 hydra:
   run:
