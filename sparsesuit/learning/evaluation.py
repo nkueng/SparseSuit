@@ -30,7 +30,8 @@ class Evaluator:
         self.train_config = utils.load_config(self.exp_path)
 
         # cuda setup
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        use_available_gpu = torch.cuda.is_available() and cfg.gpu
+        self.device = torch.device("cuda" if use_available_gpu else "cpu")
 
         # logger setup
         log_level = logging.DEBUG if cfg.debug else logging.INFO
@@ -109,11 +110,11 @@ class Evaluator:
         ds_dir = utils.ds_path_from_config(
             cfg.evaluation.eval_dataset, "evaluation", cfg.debug
         )
+        self.stats = {}
+        self.pose_mean = 0
+        self.pose_std = 1
         if self.train_config.hyperparameters.train_on_processed:
             ds_dir += "_nn"
-            self.stats = {}
-            self.pose_mean = 0
-            self.pose_std = 1
         else:
             ds_dir += "_n"
             # load test dataset statistics
@@ -240,7 +241,7 @@ class Evaluator:
 
         # save predicted poses with model
         file_name = "predictions.npz"
-        if self.eval_config.eval_dataset != "AMASS":
+        if self.eval_config.eval_dataset.source != "AMASS":
             file_name = "real_predictions.npz"
         poses_filename = os.path.join(self.exp_path, file_name)
         with open(poses_filename, "wb") as fout:

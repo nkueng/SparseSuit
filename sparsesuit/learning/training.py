@@ -111,6 +111,7 @@ class Trainer:
             print("Training\n*******************\n")
         self.logger.info("Using {} device".format(self.device))
         self.logger.info(OmegaConf.to_yaml(cfg))
+        utils.write_config(path=self.model_path, config=cfg)
 
         # get dataset required by configuration
         ds_dir = utils.ds_path_from_config(
@@ -118,11 +119,14 @@ class Trainer:
         )
         self.stats = {}
         if self.train_on_processed:
+            # training on "processed" data with zero mean and unit variance
             ds_dir += "_nn"
         else:
+            # training on normalized data
             ds_dir += "_n"
             stats_path = os.path.join(ds_dir, "stats.npz")
             if self.use_stats:
+                # "process" data for zero mean and unit variance with statistics
                 if os.path.isfile(stats_path):
                     # load statistics
                     with np.load(stats_path) as stats_data:
@@ -475,7 +479,7 @@ def do_training(cfg: DictConfig):
     # adapt evaluation dataset to training dataset
     eval_cfg.evaluation.experiment = trainer.experiment_name
     eval_cfg.evaluation.eval_dataset = cfg.experiment.train_dataset
-    # keep debugging and noise flag but force without visualization
+    # keep debugging flag but force without visualization
     eval_cfg.debug = cfg.debug
     eval_cfg.visualize = False
     eval = Evaluator(cfg=eval_cfg)
