@@ -478,7 +478,7 @@ def do_training(cfg: DictConfig):
     eval_cfg = OmegaConf.load(eval_cfg_path)
     # adapt evaluation dataset to training dataset
     eval_cfg.evaluation.experiment = trainer.experiment_name
-    eval_cfg.evaluation.eval_dataset = cfg.experiment.train_dataset
+    # eval_cfg.evaluation.eval_dataset = cfg.experiment.train_dataset
     # keep debugging flag but force without visualization
     eval_cfg.debug = cfg.debug
     eval_cfg.visualize = False
