@@ -324,9 +324,9 @@ class Normalizer:
             dataset_name = self.dataset_mapping.get(subject_i)
             if dataset_name is None:
                 # check for gait sequences in RKK_STUDIO
-                if self.ds_source == "RKK_STUDIO":
-                    if "gait" in str.lower(motion_type_i):
-                        return "test"
+                # if self.ds_source == "RKK_STUDIO":
+                #     if "gait" in str.lower(motion_type_i):
+                #         return "test"
 
                 # check for motion types in validation set
                 dataset_name = self.dataset_mapping.get(subject_i + "/" + motion_type_i)

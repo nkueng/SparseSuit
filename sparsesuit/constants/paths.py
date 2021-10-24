@@ -54,28 +54,29 @@ DIP_IMU_MAPPING = {
     "s_07/04": "validation",
 }
 
-# RKK_STUDIO_MAPPING = {
-#     "05": "test",
-#     "01/3_Sidestep_take-7": "validation",
-#     "03/1_Gait_take-3": "validation",
-#     "04/5_Jump_take-9": "validation",
-#     "02/2_Run_take-1": "validation",
-#     "01/4_Sway_take-2": "validation",
-# }
-# test dataset contains all gait motions
+# one entire subject for test, one of each motion for validation
+RKK_STUDIO_MAPPING = {
+    "05": "test",
+    "01/3_Sidestep_take-7": "validation",
+    "03/1_Gait_take-3": "validation",
+    "04/5_Jump_take-9": "validation",
+    "02/2_Run_take-1": "validation",
+    "01/4_Sway_take-2": "validation",
+}
+# test dataset contains all gait motions: enable code in normalization.py
 # RKK_STUDIO_MAPPING = {
 #     "01/3_Sidestep_take-7": "validation",
 #     "02/2_Run_take-1": "validation",
 #     "05/4_Sway_take-5": "validation",
 # }
 # use entire dataset for evaluation
-RKK_STUDIO_MAPPING = {
-    "01": "test",
-    "02": "test",
-    "03": "test",
-    "04": "test",
-    "05": "test",
-}
+# RKK_STUDIO_MAPPING = {
+#     "01": "test",
+#     "02": "test",
+#     "03": "test",
+#     "04": "test",
+#     "05": "test",
+# }
 
 AMASS_MAPPING = {
     "ACCAD/Female1Running_c3d_C5-walktorun": "test",
