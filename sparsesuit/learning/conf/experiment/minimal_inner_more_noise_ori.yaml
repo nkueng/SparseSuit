@@ -1,0 +1,20 @@
+name: minimal_inner_more_noise_ori
+
+sensors:
+  sensor_config: SSP
+  sensor_count: 7
+  names:
+    - head
+    - left_elbow
+    - right_elbow
+    - left_knee
+    - right_knee
+
+train_dataset:
+  source: AMASS
+  sensor_config: SSP
+  fps: 100
+  synthesis:
+    acc_noise: 0
+    gyro_noise: 0.001
+    acc_delta: 4
