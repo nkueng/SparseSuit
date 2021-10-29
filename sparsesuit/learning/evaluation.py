@@ -143,6 +143,10 @@ class Evaluator:
         test_ds = utils.BigDataset(test_ds_path, test_ds_size)
         self.test_dl = DataLoader(test_ds, num_workers=4, pin_memory=True)
 
+        self.logger.info(
+            "Evaluating {} on {}.".format(self.eval_config.experiment, ds_dir)
+        )
+
     def evaluate(self):
         # set up error statistics
         stats_pos_err = Welford()
@@ -165,6 +169,11 @@ class Evaluator:
                         batch_num, filename[0], ori.shape[1]
                     )
                 )
+
+                # DEBUG
+                # pass zero acceleration to check for influence on pose prediction
+                # acc = torch.zeros_like(acc)
+                # ori = torch.zeros_like(ori)
 
                 # load input and target
                 input_vec, target_vec = utils.assemble_input_target(
@@ -238,6 +247,10 @@ class Evaluator:
 
                 # keep track of angular errors per joint and per asset
                 stats_ang_per_asset[filename[0]] = stats_ang_err_asset.mean
+
+                self.logger.info(
+                    "Mean angular error: {}".format(np.mean(stats_ang_err_asset.mean))
+                )
 
         # save predicted poses with model
         file_name = "predictions.npz"

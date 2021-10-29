@@ -5,6 +5,7 @@ finetune_dataset:
   fps: 100
 
 debug: False
+gpu: True
 train_on_processed: False
 
 defaults:

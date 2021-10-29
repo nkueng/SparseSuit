@@ -7,6 +7,7 @@ import time
 import hydra
 import submitit
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
@@ -253,6 +254,19 @@ class Trainer:
 
                 self.logger.debug("\nLoaded files {}:".format("\n".join(file_id)))
 
+                # DEBUG
+                # plot acc
+                # y = acc[0]
+                # x = np.linspace(0, len(y), len(y))
+                # fig, ax = plt.subplots()
+                # ax.set_prop_cycle(color=["red", "green", "blue"])
+                # ax.plot(x, y)
+                # ax.set_title("Real Acceleration Signals")
+                # plt.xlabel("Frame Number")
+                # plt.ylabel("Acceleration [m/s²]")
+                # plt.legend(["x", "y", "z"])
+                # fig.show()
+
                 input_vec, target_vec = utils.assemble_input_target(
                     ori, acc, pose, self.sens_ind, self.stats
                 )
@@ -482,8 +496,8 @@ def do_training(cfg: DictConfig):
     # keep debugging flag but force without visualization
     eval_cfg.debug = cfg.debug
     eval_cfg.visualize = False
-    eval = Evaluator(cfg=eval_cfg)
-    eval.evaluate()
+    evaluator = Evaluator(cfg=eval_cfg)
+    evaluator.evaluate()
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ dataset:
 train_chunk_len: 300
 visualize: False
 skip_existing: False
+clean_existing: False
 debug: False
 
 hydra:
