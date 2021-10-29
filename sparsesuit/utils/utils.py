@@ -270,3 +270,55 @@ def rot_from_vecs(vec_init, vec_goal):
     )
     rot_angle = np.arcsin(np.linalg.norm(rot_axis))
     return aa_to_rot_matrix(rot_angle * rot_axis).reshape([3, 3])
+
+
+def interpolation(poses_ori, fps_ori, fps_target):
+    """
+    Interpolation of pose vectors poses_ori from original framerate fps_ori to desired framerate fps_target in the
+    general case.
+    """
+    poses = []
+    total_time = len(poses_ori) / fps_ori
+    times_ori = np.arange(0, total_time, 1.0 / fps_ori)
+    times = np.arange(0, total_time, 1.0 / fps_target)
+
+    for t in times:
+        index = findNearest(t, times_ori)
+        if max(index) >= poses_ori.shape[0]:
+            break
+        a = poses_ori[index[0]]
+        t_a = times_ori[index[0]]
+        b = poses_ori[index[1]]
+        t_b = times_ori[index[1]]
+
+        if t_a == t:
+            tmp_pose = a
+        elif t_b == t:
+            tmp_pose = b
+        else:
+            tmp_pose = a + ((t - t_a) * (b - a) / (t_b - t_a))
+        poses.append(tmp_pose)
+
+    return np.asarray(poses)
+
+
+def interpolation_integer(poses_ori, fps_ori, fps_target):
+    """
+    Interpolation of pose vectors poses_ori from original framerate fps_ori to desired framerate fps_target in the
+    special case where fps_ori is an integer multiple of fps_target.
+    """
+    poses = []
+    n_tmp = int(fps_ori / fps_target)
+    poses_ori = poses_ori[::n_tmp]
+
+    for t in poses_ori:
+        poses.append(t)
+
+    return np.asarray(poses)
+
+
+def findNearest(t, t_list):
+    list_tmp = np.array(t_list) - t
+    list_tmp = np.abs(list_tmp)
+    index = np.argsort(list_tmp)[:2]
+    return index

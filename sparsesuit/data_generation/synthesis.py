@@ -195,9 +195,11 @@ class Synthesizer:
         data_out = {}
         # In case the original frame rates (eg 40FPS) are different from target rates (60FPS)
         if (fps_ori % self.fps) == 0:
-            data_out["gt"] = self.interpolation_integer(data_in["poses"], fps_ori)
+            data_out["gt"] = utils.interpolation_integer(
+                data_in["poses"], fps_ori, self.fps
+            )
         else:
-            data_out["gt"] = self.interpolation(data_in["poses"], fps_ori)
+            data_out["gt"] = utils.interpolation(data_in["poses"], fps_ori, self.fps)
 
         # skip if asset contains less than 300 frames (after synthesis)
         frames_after = data_out["gt"].shape[0] - 2 * self.acc_delta
@@ -263,8 +265,8 @@ class Synthesizer:
             sensor = pymusim.BaseSensor(sensor_opt)
 
             accel_vec = acceleration.reshape([-1, 3])
-            accel_tmp = np.array(sensor.transform_measurement(accel_vec))
-            acceleration = accel_tmp.reshape([-1, len(self.joint_ids), 3])
+            accel_noisy = np.array(sensor.transform_measurement(accel_vec))
+            acceleration = accel_noisy.reshape([-1, len(self.joint_ids), 3])
 
         # clip acc at sensor saturation value
         if self.acc_saturation is not None:
@@ -275,7 +277,20 @@ class Synthesizer:
             if need_clip.any():
                 acceleration[need_clip] *= np.expand_dims(clip_coef[need_clip], axis=1)
 
-        # TODO: make orientations noisy
+        # make orientations noisy
+        if self.gyro_noise > 0.0:
+            import pymusim
+
+            sensor_opt = pymusim.SensorOptions()
+            sensor_opt.set_gravity_axis(-1)  # disable additive gravity
+            sensor_opt.set_white_noise(self.gyro_noise)
+            sensor = pymusim.BaseSensor(sensor_opt)
+
+            ori_mat = orientation.reshape([-1, 9])
+            ori_aa = utils.rot_matrix_to_aa(ori_mat)
+            ori_noisy = np.array(sensor.transform_measurement(ori_aa))
+            oir_noisy_mat = utils.aa_to_rot_matrix(ori_noisy)
+            orientation = oir_noisy_mat.reshape([-1, len(self.joint_ids), 3, 3])
 
         return orientation[self.acc_delta : -self.acc_delta], acceleration
 
@@ -345,49 +360,6 @@ class Synthesizer:
             )
 
         return orientation, acceleration
-
-    @staticmethod
-    def findNearest(t, t_list):
-        list_tmp = np.array(t_list) - t
-        list_tmp = np.abs(list_tmp)
-        index = np.argsort(list_tmp)[:2]
-        return index
-
-    # Turn MoCap data into 60FPS
-    def interpolation_integer(self, poses_ori, fps):
-        poses = []
-        n_tmp = int(fps / self.fps)
-        poses_ori = poses_ori[::n_tmp]
-
-        for t in poses_ori:
-            poses.append(t)
-
-        return np.asarray(poses)
-
-    def interpolation(self, poses_ori, fps):
-        poses = []
-        total_time = len(poses_ori) / fps
-        times_ori = np.arange(0, total_time, 1.0 / fps)
-        times = np.arange(0, total_time, 1.0 / self.fps)
-
-        for t in times:
-            index = self.findNearest(t, times_ori)
-            if max(index) >= poses_ori.shape[0]:
-                break
-            a = poses_ori[index[0]]
-            t_a = times_ori[index[0]]
-            b = poses_ori[index[1]]
-            t_b = times_ori[index[1]]
-
-            if t_a == t:
-                tmp_pose = a
-            elif t_b == t:
-                tmp_pose = b
-            else:
-                tmp_pose = a + ((t - t_a) * (b - a) / (t_b - t_a))
-            poses.append(tmp_pose)
-
-        return np.asarray(poses)
 
 
 @hydra.main(config_path="conf", config_name=syn_config_name)
