@@ -2,7 +2,6 @@ import os
 
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import plotly.io as pio
 
 import pickle as pkl
@@ -18,7 +17,7 @@ from scipy import signal
 from body_visualizer.mesh.mesh_viewer import MeshViewer
 from body_visualizer.tools import vis_tools
 
-from sparsesuit.constants import paths
+from sparsesuit.constants import paths, sensors
 from sparsesuit.utils import smpl_helpers, utils, visualization
 
 pio.renderers.default = "browser"
@@ -191,12 +190,48 @@ def find_valid_frames(log_file):
     return valid_frames
 
 
+def get_valid_ind(valid_frames):
+    # get indices in valid_frames where the invalid frames start and end
+    v = valid_frames.astype(int)
+    ind = np.where(np.roll(v, 1) != v)[0]
+    assert len(ind) == 2
+    return ind
+
+
+def split_data(sensor_acc, sensor_ori, vicon_poses, valid_frames):
+    ind = get_valid_ind(valid_frames)
+    out_dicts = []
+    ind1 = ind[0] - 25
+    ind2 = ind[1] + 50
+    out_dict1 = {
+        "imu_ori": sensor_ori[:ind1],
+        "imu_acc": sensor_acc[:ind1],
+        "gt": vicon_poses[:ind1],
+    }
+    out_dicts.append(out_dict1)
+
+    out_dict2 = {
+        "imu_ori": sensor_ori[ind2:],
+        "imu_acc": sensor_acc[ind2:],
+        "gt": vicon_poses[ind2:],
+    }
+    out_dicts.append(out_dict2)
+
+    return out_dicts
+
+
 if __name__ == "__main__":
+
+    PLOT = True
+    SAVE_PLOTS = True
 
     # set src directories
     vicon_src_dir = os.path.join(paths.SOURCE_PATH, "raw_SSP_dataset/Vicon_data/MoSh")
     studio_src_dir = os.path.join(paths.SOURCE_PATH, "raw_SSP_dataset/SSP_data/Export")
     sensor_src_dir = os.path.join(paths.SOURCE_PATH, "raw_SSP_dataset/SSP_data")
+
+    # set target directories
+    trgt_dir = os.path.join(paths.SOURCE_PATH, "RKK_VICON/SSP_fps100")
 
     # load vicon2srec mapping
     map_path = os.path.join(utils.get_project_folder(), "sandbox")
@@ -239,31 +274,7 @@ if __name__ == "__main__":
 
     sensor_files = sorted(sensor_files)
 
-    # # for every studio file, find the corresponding vicon file
-    # for studio_file in studio_files:
-    #     studio_file = studio_files[1]
-    #     print(studio_file)
-    #     studio_poses = extract_npz_data(studio_file)
-    #
-    #     studio_poses[:, :3] = 0
-    #     pose = torch.Tensor(studio_poses)
-    #     verts, joints, rel_tfs = smpl_helpers.my_lbs(smpl_model, pose)
-    #     verts = utils.copy2cpu(verts)
-    #     visualization.vis_smpl(
-    #         faces=smpl_model.faces,
-    #         vertices=[verts],
-    #         play_frames=1200,
-    #         playback_speed=1,
-    #         # sensors=[verts[:, list(SENS_VERTS_SSP.values())]],
-    #         # oris=[oris],
-    #         # accs=[accs],
-    #         # joints=[joints],
-    #         # pose=[poses],
-    #         fps=100,
-    #     )
-    #
-    #     plot(joints)
-
+    success_counter = 0
     for subject in vicon2srec.keys():
         for trial, indices in vicon2srec[subject].items():
             indices = str2list(indices)
@@ -281,8 +292,10 @@ if __name__ == "__main__":
             vicon_name = vicon_file.split("MoSh/")[1]
             studio_poses = extract_npz_data(studio_file)["poses"]
             studio_name = studio_file.split("Export/")[1]
-            sensor_data = extract_npz_data(sensor_file)["acc"]
-            sensor_name = sensor_file.split("/SSP_data")[1]
+            sensor_data = extract_npz_data(sensor_file)
+            sensor_acc = sensor_data["acc"]
+            sensor_ori = sensor_data["ori"]
+            sensor_name = sensor_file.split("/SSP_data/")[1]
             if len(vicon_poses_orig) == 0:
                 print("No data in {}. Skipping!".format(vicon_name))
                 continue
@@ -290,8 +303,18 @@ if __name__ == "__main__":
                 print("No data in {}. Skipping!".format(studio_name))
                 continue
 
+            # make sure that studio poses and sensor data have same length
+            if len(sensor_acc) != len(studio_poses):
+                # cut off first frame of whichever is longer
+                if len(sensor_acc) > len(studio_poses):
+                    sensor_acc = sensor_acc[1:]
+                    sensor_ori = sensor_ori[1:]
+                else:
+                    studio_poses = studio_poses[1:]
+
             # everything is fine, continue
-            print("{} <-----> {}".format(vicon_name, sensor_name))
+            correspondence = "{} <-----> {}".format(vicon_name, sensor_name)
+            print(correspondence)
 
             # add zeros for invalid vicon frames
             valid_frames = np.array(valid_frames)
@@ -301,8 +324,9 @@ if __name__ == "__main__":
             # downsample vicon data from 200 to 100 fps
             valid_frames = valid_frames[::2]
             vicon_poses = vicon_poses[::2]
+            has_invalid = np.any(~valid_frames)
 
-            # plot vicon data
+            # compute joint positions for vicon poses
             pose = torch.Tensor(vicon_poses)
             pose[:, :3] = torch.ones(3) * 0.5773502691896258 * 2.0943951023931957
             verts, joints, rel_tfs = smpl_helpers.my_lbs(smpl_model, pose)
@@ -310,7 +334,7 @@ if __name__ == "__main__":
             vicon_joints = utils.copy2cpu(joints[:, 7, 2])
             # plot(vicon_joints, vicon_name)
 
-            # plot studio data
+            # compute joint positions for studio poses
             pose = torch.Tensor(studio_poses)
             pose[:, :3] = torch.ones(3) * 0.5773502691896258 * 2.0943951023931957
             verts, joints, rel_tfs = smpl_helpers.my_lbs(smpl_model, pose)
@@ -318,66 +342,131 @@ if __name__ == "__main__":
             studio_joints = utils.copy2cpu(joints[:, 7, 2])
             # plot(studio_joints, studio_name)
 
-            # plot sensor data
-            # joints = sensor_data[:, 18]
-            # plot(joints, sensor_name)
-
-            # vicon_ind = indices[2]
-            # studio_ind = indices[3]
-            #
-            # vicon_joints = vicon_joints[vicon_ind:]
-            # studio_joints = studio_joints[studio_ind:]
-
-            # make vectors the same length
-            vicon_len = len(vicon_joints)
-            studio_len = len(studio_joints)
-            len_diff = abs(vicon_len - studio_len)
-            if vicon_len > studio_len:
-                # pad studio joints
-                studio_joints = np.pad(studio_joints, [0, len_diff], "edge")
-            else:
-                # pad vicon joints
-                vicon_joints = np.pad(vicon_joints, [0, len_diff], "edge")
-
-            # correlate signals to find shift
+            # correlate signals of chosen joint positions to find shift automatically
             studio_joints -= np.mean(studio_joints)
             vicon_joints -= np.mean(vicon_joints)
             corr = signal.correlate(studio_joints, vicon_joints, "full")
             shift = np.argmax(corr) - len(vicon_joints) + 1
             corr /= max(corr)
 
-            # TODO: add option to manually overwrite shift in yaml
+            # manually overwrite shift if given in yaml
             if len(indices) == 3:
                 shift = indices[2]
-            # shift studio signal
-            if shift >= 0:
+            # shift studio signal and clip
+            studio_joints_aligned = studio_joints
+            if shift > 0:
                 studio_joints_aligned = studio_joints[shift:]
-                studio_joints_aligned = np.pad(
-                    studio_joints_aligned, [0, shift], "edge"
-                )
-            else:
+                sensor_acc = sensor_acc[shift:]
+                sensor_ori = sensor_ori[shift:]
+                # studio_joints_aligned = np.pad(
+                #     studio_joints_aligned, [0, shift + len_diff], "constant"
+                # )
+                vicon_joints = vicon_joints[:-shift]
+                valid_frames = valid_frames[:-shift]
+                vicon_poses = vicon_poses[:-shift]
+            elif shift < 0:
                 studio_joints_aligned = studio_joints[:shift]
-                studio_joints_aligned = np.pad(
-                    studio_joints_aligned, [abs(shift), 0], "edge"
+                sensor_acc = sensor_acc[:shift]
+                sensor_ori = sensor_ori[:shift]
+                # studio_joints_aligned = np.pad(
+                #     studio_joints_aligned, [abs(shift), 0], "constant"
+                # )
+                vicon_joints = vicon_joints[abs(shift) :]
+                valid_frames = valid_frames[abs(shift) :]
+                vicon_poses = vicon_poses[abs(shift) :]
+
+            # clip data vectors to the same length
+            vicon_len = len(vicon_joints)
+            studio_len = len(studio_joints_aligned)
+            len_diff = abs(vicon_len - studio_len)
+            if vicon_len > studio_len:
+                # clip vicon data
+                vicon_joints = vicon_joints[:-len_diff]
+                valid_frames = valid_frames[:-len_diff]
+                vicon_poses = vicon_poses[:-len_diff]
+                # studio_joints = np.pad(studio_joints, [0, len_diff], "edge")
+            elif studio_len > vicon_len:
+                # clip studio data
+                studio_joints_aligned = studio_joints_aligned[:-len_diff]
+                sensor_acc = sensor_acc[:-len_diff]
+                sensor_ori = sensor_ori[:-len_diff]
+                # vicon_joints = np.pad(vicon_joints, [0, len_diff], "edge")
+
+            # export vicon poses with sensor data as npz ready for normalization
+            sub, motion, take = sensor_name.split("/")
+            file_name = "_".join([motion.replace(" ", "_"), take.split(".npz")[0]])
+            out_folder = os.path.join(trgt_dir, sub)
+            Path(out_folder).mkdir(parents=True, exist_ok=True)
+
+            # save different if asset contains invalid vicon poses
+            if np.any(~valid_frames):
+                # split assets with invalid frames into several sequences
+                out_dicts = split_data(
+                    sensor_acc, sensor_ori, vicon_poses, valid_frames
                 )
+                for i, out_dict in enumerate(out_dicts):
+                    out_name = (
+                        os.path.join(out_folder, file_name) + "_" + str(i) + ".npz"
+                    )
+                    with open(out_name, "wb") as fout:
+                        np.savez_compressed(fout, **out_dict)
+
+                    success_counter += 1
+
+            else:
+                # save whole sequence
+                out_dict = {
+                    "imu_ori": sensor_ori,
+                    "imu_acc": sensor_acc,
+                    "gt": vicon_poses,
+                }
+                out_name = os.path.join(out_folder, file_name) + ".npz"
+                with open(out_name, "wb") as fout:
+                    np.savez_compressed(fout, **out_dict)
+
+                success_counter += 1
 
             # plot
-            data = {
-                "vicon": vicon_joints,
-                "studio": studio_joints,
-                # "corr": corr,
-                "studio_aligned": studio_joints_aligned,
-            }
-            df = pd.DataFrame(data)
-            fig = px.line(
-                df,
-                y=[
-                    "vicon",
-                    "studio",
-                    # "corr",
-                    "studio_aligned",
-                ],
-            )
-            fig.show()
+            if PLOT:
+                data = {
+                    "vicon": vicon_joints,
+                    # "studio": studio_joints,
+                    # "corr": corr,
+                    "studio_aligned": studio_joints_aligned,
+                    "valid_frames": valid_frames.astype(int),
+                    "acc": sensor_acc[:, 0, 2] / 20,
+                }
+                df = pd.DataFrame(data)
+                fig = px.line(
+                    df,
+                    y=[
+                        "vicon",
+                        # "studio",
+                        # "corr",
+                        "studio_aligned",
+                        # "valid_frames",
+                        "acc",
+                    ],
+                    title=correspondence,
+                )
+                if SAVE_PLOTS:
+                    img_folder = os.path.join(paths.DOC_PATH, "figures/RKK_VICON/", sub)
+                    Path(img_folder).mkdir(parents=True, exist_ok=True)
+                    img_name = os.path.join(img_folder, file_name) + ".png"
+                    fig.write_image(img_name)
+                else:
+                    fig.show()
 
-            continue
+    # write config for this dataset
+    cfg = {
+        "source": "RKK_VICON",
+        "sensor_config": "SSP",
+        "fps": 100,
+        "sequences": success_counter,
+        "sensor_count": 19,
+        "sensor_names": sensors.SENS_NAMES_SSP,
+    }
+    ds_cfg = {
+        "dataset": cfg,
+    }
+    utils.write_config(trgt_dir, ds_cfg)

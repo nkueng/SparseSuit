@@ -1,5 +1,5 @@
- read: Subject1/Trial04 of vicon poses maps to 1 Gait/take-1 of the same subject (01) in studio poses;
- number of frames that studio is shifted wrt. vicon
+# read: Subject1/Trial04 of vicon poses maps to 1 Gait/take-1 of the same subject (01) in studio poses;
+# number of frames that studio is shifted wrt. vicon
 Subject1:
   T03: 1, 1
   T04: 1, 2
