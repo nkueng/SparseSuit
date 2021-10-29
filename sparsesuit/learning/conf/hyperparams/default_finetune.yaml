@@ -1,5 +1,12 @@
-defaults:
-  - default
+batch_size: 16
+max_epochs: 80
+early_stopping_tolerance: 15
+grad_clip_norm: 1
+shuffle: True
+train_on_processed: False
+use_stats: True
+num_workers: 4
+pin_memory: True
 
 evaluate_every_step: 50
 initial_learning_rate: 0.00001
