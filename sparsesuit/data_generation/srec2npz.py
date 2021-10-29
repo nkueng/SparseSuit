@@ -137,7 +137,10 @@ def visualize(oris, accs, file):
     file_path = file.split(".srec")[0].split("/")[-3:-1]
     file_path = os.path.join(*file_path)
     pose_dir = os.path.join(
-        paths.DATA_PATH, "raw_SSP_dataset/SSP_data/Export", file_path
+        paths.SOURCE_PATH,
+        "raw_SSP_dataset/SSP_data/Export",
+        # "raw_SSP_dataset/Vicon_data/MoSh",
+        file_path,
     )
     file_list = os.listdir(pose_dir)
     this_files = [file for file in file_list if "smpl" in file and take in file]
@@ -198,10 +201,10 @@ def vis_oris_accs(oris, accs, pose=None):
 if __name__ == "__main__":
     VISUALIZE = False
     SKIP_EXISTING = False
-    PLOT = False
+    PLOT = True
 
     # set src directory with files
-    src_dir = os.path.join(paths.DATA_PATH, "raw_SSP_dataset/SSP_data")
+    src_dir = os.path.join(paths.SOURCE_PATH, "raw_SSP_dataset/SSP_data")
 
     # walk over all files in directory and collect relevant paths
     srec_files = []

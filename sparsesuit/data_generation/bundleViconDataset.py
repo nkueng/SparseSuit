@@ -234,8 +234,8 @@ if __name__ == "__main__":
     trgt_dir = os.path.join(paths.SOURCE_PATH, "RKK_VICON/SSP_fps100")
 
     # load vicon2srec mapping
-    map_path = os.path.join(utils.get_project_folder(), "sandbox")
-    vicon2srec = utils.load_config(map_path, "vicon2srec.yaml")
+    map_path = os.path.join(utils.get_project_folder(), "data_generation")
+    vicon2srec = utils.load_config(map_path, "conf/vicon2srec.yaml")
 
     # get SMPL model
     smpl_model = smpl_helpers.load_smplx()

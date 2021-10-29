@@ -87,7 +87,7 @@ def retarget_motion(motion):
 
 if __name__ == "__main__":
     # get a list of all .npz files in source directory
-    src_dir = os.path.join(paths.DATA_PATH, "raw_SSP_dataset/SSP_data/Export")
+    src_dir = os.path.join(paths.SOURCE_PATH, "raw_SSP_dataset/SSP_data/Export")
 
     # walk over all files in directory and collect relevant paths
     npz_files = []

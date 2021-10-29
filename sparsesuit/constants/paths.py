@@ -63,6 +63,7 @@ RKK_STUDIO_MAPPING = {
     "02/2_Run_take-1": "validation",
     "01/4_Sway_take-2": "validation",
 }
+RKK_VICON_MAPPING = RKK_STUDIO_MAPPING
 # test dataset contains all gait motions: enable code in normalization.py
 # RKK_STUDIO_MAPPING = {
 #     "01/3_Sidestep_take-7": "validation",

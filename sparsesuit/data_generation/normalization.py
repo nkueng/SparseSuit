@@ -58,6 +58,8 @@ class Normalizer:
         elif self.ds_source == "RKK_STUDIO":
             # src_folder = paths.RKK_STUDIO_19_PATH
             self.dataset_mapping = paths.RKK_STUDIO_MAPPING
+        elif self.ds_source == "RKK_VICON":
+            self.dataset_mapping = paths.RKK_VICON_MAPPING
         else:
             raise NameError("Invalid dataset configuration. Aborting!")
 
@@ -446,6 +448,11 @@ class Normalizer:
             try:
                 raw_data = self.extract_raw_data(file)
             except AttributeError:
+                continue
+
+            # skip if less than 300 frames
+            if len(raw_data[0]) < 300:
+                print("Sequence {} is less than 300 frames. Skipping!".format(file))
                 continue
 
             # normalize the extracted motion asset

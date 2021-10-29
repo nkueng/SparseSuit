@@ -19,7 +19,7 @@ def get_data(file_path):
 
 smpl_folder_options = {
     "RKK_STUDIO": "Export",
-    "RKK_VICON": "Vicon",  # TODO: change once the data is here
+    "RKK_VICON": "MoSh",
 }
 
 use_motions = [
@@ -27,7 +27,7 @@ use_motions = [
     "run",
     "sidestep",
     "sway",
-    # "jump",
+    "jump",
 ]
 
 if __name__ == "__main__":
@@ -105,6 +105,7 @@ if __name__ == "__main__":
 
         # make sure that vectors have same length
         if len(acc) != len(pose):
+            # cut off first frame of whichever is longer
             if len(acc) > len(pose):
                 acc = acc[1:]
                 ori = ori[1:]
