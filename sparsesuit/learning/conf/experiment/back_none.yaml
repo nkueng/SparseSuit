@@ -1,7 +1,9 @@
 name: back_none
-config: SSP
-count: 15
+
 sensors:
+  sensor_config: SSP
+  sensor_count: 15
+  names:
   - head
   - left_shoulder
   - right_shoulder
@@ -15,6 +17,12 @@ sensors:
   - right_knee
   - left_ankle
   - right_ankle
-dataset: synthetic
-noise: False
 
+train_dataset:
+  source: AMASS
+  sensor_config: SSP
+  fps: 100
+  synthesis:
+    acc_noise: 0
+    gyro_noise: 0
+    acc_delta: 4

@@ -1,8 +1,10 @@
 name: 15_sym_in
 explanation: which sensors contribute more, the ones further in or further down the kinematic chains? This experiment drops the sensors further from the core
-config: SSP
-count: 15
+
 sensors:
+  sensor_config: SSP
+  sensor_count: 15
+  names:
   - left_back
   - right_back
   - left_collar
@@ -16,5 +18,12 @@ sensors:
   - right_hip
   - left_ankle
   - right_ankle
-dataset: synthetic
-noise: False
+
+train_dataset:
+  source: AMASS
+  sensor_config: SSP
+  fps: 100
+  synthesis:
+    acc_noise: 0
+    gyro_noise: 0
+    acc_delta: 4
