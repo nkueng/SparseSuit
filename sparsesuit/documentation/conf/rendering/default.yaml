@@ -5,7 +5,6 @@ camera_translation: [0, 0.65, 2]
 camera_angle: 15
 orthographic_camera: False
 smooth: False
-source: None
 asset_idx: 2
 frame_idx: -1
 show_rendering: True
@@ -33,3 +32,11 @@ show_unused_sensors: False
 sensor_config: SSP
 real_data: False
 
+#dataset:
+#  source: AMASS
+#  sensor_config: SSP
+#  fps: 100
+#  synthesis:
+#    acc_noise: 0
+#    gyro_noise: 0
+#    acc_delta: 4

@@ -35,6 +35,62 @@ def render_from_config(config: DictConfig):
     elif cfg.name == "leg_raise":
         poses_padded = create_leg_raise_sequence()
 
+    # load poses from requested dataset
+    if "dataset" in cfg:
+        ds_path = utils.ds_path_from_config(cfg.dataset, "training")
+
+        filelist = []
+        for root, dirs, files in os.walk(os.path.join(ds_path, "test")):
+            for file in files:
+                if file.endswith(".npz"):
+                    filelist.append(os.path.join(root, file))
+
+        filelist = sorted(filelist)
+        poses_padded = []
+        for file in filelist:
+            poses = np.load(file)["pose"]
+            poses_padded.append(smpl_helpers.extract_from_norm_ds(poses))
+
+        # load models and their predictions
+        if "models" in cfg:
+            predictions = {}
+            sens = {}
+            for model in cfg.models:
+                # load model predictions
+                model_path = os.path.join(paths.RUN_PATH, model)
+                files = os.listdir(model_path)
+                pred_file = [file for file in files if "prediction" in file][0]
+                with np.load(os.path.join(model_path, pred_file)) as data:
+                    data_in = dict(data)
+                predictions[model] = list(data_in.values())
+                # load model config
+                exp_config = utils.load_config(model_path).experiment.sensors
+                sens[model] = exp_config.names
+                if exp_config.sensor_config == "SSP":
+                    sens[model].append("left_pelvis")
+                    sens[model].append("right_pelvis")
+                elif exp_config.sensor_config == "MVN":
+                    sens[model].append("pelvis")
+
+            if "VICON" in ds_path:
+                # add RKK_STUDIO poses to evaluation
+                studio_path = ds_path.replace("VICON", "STUDIO")
+                studio_files = []
+                for root, dirs, files in os.walk(os.path.join(studio_path, "test")):
+                    for file in files:
+                        if file.endswith(".npz"):
+                            studio_files.append(os.path.join(root, file))
+
+                studio_files = sorted(studio_files)
+                studio_poses = []
+                for file in studio_files:
+                    poses = np.load(file)["pose"]
+                    studio_poses.append(np.expand_dims(poses, axis=0))
+
+                predictions["rkk_studio"] = studio_poses
+                cfg.models.append("rkk_studio")
+                sens["rkk_studio"] = sensors.SENS_NAMES_SSP
+
     else:
         # load pose data from one of the datasets
         if cfg.source == "AMASS":
@@ -52,60 +108,6 @@ def render_from_config(config: DictConfig):
             )
             # set root orientation to zero
             poses_padded[:, :3] = 0
-        elif cfg.source in [
-            "AMASS_MVN_nn",
-            "AMASS_SSP_nn",
-            "DIP_IMU_17_nn",
-            "RKK_19_nn",
-        ]:
-            # load motion asset in normalized form
-            if cfg.real_data:
-                src_dir = os.path.join(paths.DATASET_PATH, "Real", cfg.source)
-            else:
-                src_dir = os.path.join(paths.DATASET_PATH, "Synthetic", cfg.source)
-            filelist = []
-            for root, dirs, files in os.walk(os.path.join(src_dir, "test")):
-                for file in files:
-                    if file.endswith(".npz"):
-                        filelist.append(os.path.join(root, file))
-
-            filelist = sorted(filelist)
-            motions = []
-            for file in filelist:
-                motion_data = np.load(file)
-                motions.append(motion_data["pose"])
-
-            # load dataset stats
-            stats_path = os.path.join(src_dir, "stats.npz")
-            with np.load(stats_path, allow_pickle=True) as data:
-                stats = dict(data)
-            pose_mean, pose_std = stats["pose_mean"], stats["pose_std"]
-            poses_padded = []
-            for motion in motions:
-                pose_trgt = motion * pose_std + pose_mean
-                poses_padded.append(smpl_helpers.extract_from_norm_ds(pose_trgt))
-
-            # load models
-            if "models" in cfg:
-                predictions = {}
-                sens = {}
-                for model in cfg.models:
-                    # load model predictions
-                    model_path = os.path.join(paths.RUN_PATH, model)
-                    pred_name = (
-                        "real_predictions.npz" if cfg.real_data else "predictions.npz"
-                    )
-                    with np.load(os.path.join(model_path, pred_name)) as data:
-                        data_in = dict(data)
-                    predictions[model] = list(data_in.values())
-                    # load model config
-                    exp_config = utils.load_config(model_path).experiment
-                    sens[model] = exp_config.sensors
-                    if exp_config.config == "SSP":
-                        sens[model].append("left_pelvis")
-                        sens[model].append("right_pelvis")
-                    elif exp_config.config == "MVN":
-                        sens[model].append("pelvis")
 
         elif cfg.source == "DIP_IMU_17":
             # load real motion assets in MVN configuration
@@ -155,12 +157,7 @@ def render_from_config(config: DictConfig):
         cfg.render_frames *= cfg.render_every_n_frame
         cfg.render_every_n_frame = 1
 
-    if cfg.source in [
-        "AMASS_MVN_nn",
-        "AMASS_SSP_nn",
-        "DIP_IMU_17_nn",
-        "RKK_19_nn",
-    ]:
+    if "dataset" in cfg:
         if "models" in cfg:
             # render selected frames for all models
             for model in cfg.models:
@@ -197,12 +194,11 @@ def render_from_config(config: DictConfig):
                 cfg_i.name = cfg.name + "/target/" + str(asset_idx)
                 cfg_i.show_sensors = False
                 render_poses(poses_padded_i, smpl_model, cfg_i)
+
         else:
             for i, poses_padded_i in enumerate(poses_padded):
                 cfg_i = cfg.copy()
-                folder_name = (
-                    filelist[i].split("test/")[1].split(".npz")[0].split("/")[1]
-                )
+                folder_name = filelist[i].split("test/")[1].split(".npz")[0]
                 folder_name = cfg.name + "/" + str(i) + "_" + folder_name
                 cfg_i.name = folder_name
                 cfg_i.frame_range = list(
