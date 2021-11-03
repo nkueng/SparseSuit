@@ -1,0 +1,18 @@
+defaults:
+  - default
+
+name: all_test_sequences_RKK_VICON
+dataset:
+  source: RKK_VICON
+  sensor_config: SSP
+  fps: 100
+real_data: True
+render_width: 800
+body_transparency: 0
+render_frames: 1000
+render_every_n_frame: 10
+show_sensors: False
+show_rendering: False
+orthographic_camera: True
+camera_translation: [0, 0.5, 1.75]
+
