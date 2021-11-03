@@ -223,7 +223,7 @@ def split_data(sensor_acc, sensor_ori, vicon_poses, valid_frames):
 if __name__ == "__main__":
 
     PLOT = True
-    SAVE_PLOTS = True
+    SAVE_PLOTS = False  # saves plots instead of showing them
 
     # set src directories
     vicon_src_dir = os.path.join(paths.SOURCE_PATH, "raw_SSP_dataset/Vicon_data/MoSh")
@@ -231,7 +231,8 @@ if __name__ == "__main__":
     sensor_src_dir = os.path.join(paths.SOURCE_PATH, "raw_SSP_dataset/SSP_data")
 
     # set target directories
-    trgt_dir = os.path.join(paths.SOURCE_PATH, "RKK_VICON/SSP_fps100")
+    vicon_trg_dir = os.path.join(paths.SOURCE_PATH, "RKK_VICON/SSP_fps100")
+    studio_trg_dir = os.path.join(paths.SOURCE_PATH, "RKK_STUDIO/SSP_fps100")
 
     # load vicon2srec mapping
     map_path = os.path.join(utils.get_project_folder(), "data_generation")
@@ -312,6 +313,8 @@ if __name__ == "__main__":
                 else:
                     studio_poses = studio_poses[1:]
 
+            assert len(sensor_acc) == len(studio_poses)
+
             # everything is fine, continue
             correspondence = "{} <-----> {}".format(vicon_name, sensor_name)
             print(correspondence)
@@ -356,6 +359,7 @@ if __name__ == "__main__":
             studio_joints_aligned = studio_joints
             if shift > 0:
                 studio_joints_aligned = studio_joints[shift:]
+                studio_poses = studio_poses[shift:]
                 sensor_acc = sensor_acc[shift:]
                 sensor_ori = sensor_ori[shift:]
                 # studio_joints_aligned = np.pad(
@@ -366,6 +370,7 @@ if __name__ == "__main__":
                 vicon_poses = vicon_poses[:-shift]
             elif shift < 0:
                 studio_joints_aligned = studio_joints[:shift]
+                studio_poses = studio_poses[:shift]
                 sensor_acc = sensor_acc[:shift]
                 sensor_ori = sensor_ori[:shift]
                 # studio_joints_aligned = np.pad(
@@ -388,6 +393,7 @@ if __name__ == "__main__":
             elif studio_len > vicon_len:
                 # clip studio data
                 studio_joints_aligned = studio_joints_aligned[:-len_diff]
+                studio_poses = studio_poses[:-len_diff]
                 sensor_acc = sensor_acc[:-len_diff]
                 sensor_ori = sensor_ori[:-len_diff]
                 # vicon_joints = np.pad(vicon_joints, [0, len_diff], "edge")
@@ -395,35 +401,37 @@ if __name__ == "__main__":
             # export vicon poses with sensor data as npz ready for normalization
             sub, motion, take = sensor_name.split("/")
             file_name = "_".join([motion.replace(" ", "_"), take.split(".npz")[0]])
-            out_folder = os.path.join(trgt_dir, sub)
-            Path(out_folder).mkdir(parents=True, exist_ok=True)
 
-            # save different if asset contains invalid vicon poses
-            if np.any(~valid_frames):
-                # split assets with invalid frames into several sequences
-                out_dicts = split_data(
-                    sensor_acc, sensor_ori, vicon_poses, valid_frames
-                )
-                for i, out_dict in enumerate(out_dicts):
-                    out_name = (
-                        os.path.join(out_folder, file_name) + "_" + str(i) + ".npz"
-                    )
+            for trg_dir, poses in zip(
+                [vicon_trg_dir, studio_trg_dir], [vicon_poses, studio_poses]
+            ):
+                out_folder = os.path.join(trg_dir, sub)
+                Path(out_folder).mkdir(parents=True, exist_ok=True)
+
+                # save different if asset contains invalid vicon poses
+                if np.any(~valid_frames):
+                    # split assets with invalid frames into several sequences
+                    out_dicts = split_data(sensor_acc, sensor_ori, poses, valid_frames)
+                    for i, out_dict in enumerate(out_dicts):
+                        out_name = (
+                            os.path.join(out_folder, file_name) + "_" + str(i) + ".npz"
+                        )
+                        with open(out_name, "wb") as fout:
+                            np.savez_compressed(fout, **out_dict)
+
+                else:
+                    # save whole sequence
+                    out_dict = {
+                        "imu_ori": sensor_ori,
+                        "imu_acc": sensor_acc,
+                        "gt": poses,
+                    }
+                    out_name = os.path.join(out_folder, file_name) + ".npz"
                     with open(out_name, "wb") as fout:
                         np.savez_compressed(fout, **out_dict)
 
-                    success_counter += 1
-
-            else:
-                # save whole sequence
-                out_dict = {
-                    "imu_ori": sensor_ori,
-                    "imu_acc": sensor_acc,
-                    "gt": vicon_poses,
-                }
-                out_name = os.path.join(out_folder, file_name) + ".npz"
-                with open(out_name, "wb") as fout:
-                    np.savez_compressed(fout, **out_dict)
-
+            success_counter += 1
+            if np.any(~valid_frames):
                 success_counter += 1
 
             # plot
@@ -433,8 +441,8 @@ if __name__ == "__main__":
                     # "studio": studio_joints,
                     # "corr": corr,
                     "studio_aligned": studio_joints_aligned,
-                    "valid_frames": valid_frames.astype(int),
-                    "acc": sensor_acc[:, 0, 2] / 20,
+                    "valid_frames": valid_frames.astype(int) / 5,
+                    "acc": sensor_acc[:, 0, 2] / 80,
                 }
                 df = pd.DataFrame(data)
                 fig = px.line(
@@ -444,7 +452,7 @@ if __name__ == "__main__":
                         # "studio",
                         # "corr",
                         "studio_aligned",
-                        # "valid_frames",
+                        "valid_frames",
                         "acc",
                     ],
                     title=correspondence,
@@ -457,7 +465,9 @@ if __name__ == "__main__":
                 else:
                     fig.show()
 
-    # write config for this dataset
+                continue
+
+    # write config for both datasets
     cfg = {
         "source": "RKK_VICON",
         "sensor_config": "SSP",
@@ -469,4 +479,7 @@ if __name__ == "__main__":
     ds_cfg = {
         "dataset": cfg,
     }
-    utils.write_config(trgt_dir, ds_cfg)
+    utils.write_config(vicon_trg_dir, ds_cfg)
+
+    ds_cfg["dataset"]["source"] = "RKK_STUDIO"
+    utils.write_config(studio_trg_dir, ds_cfg)
