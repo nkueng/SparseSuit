@@ -7,7 +7,6 @@ import time
 import hydra
 import submitit
 import numpy as np
-import matplotlib.pyplot as plt
 import torch
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
