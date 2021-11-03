@@ -1,5 +1,6 @@
 debug: False
 gpu: True
+traintime_noise: True
 defaults:
   - experiment: SSP_baseline
   - hyperparams: default
