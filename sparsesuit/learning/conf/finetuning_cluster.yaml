@@ -13,9 +13,18 @@ defaults:
   - hyperparams: default_finetune
   - override hydra/job_logging: disabled
   - override hydra/hydra_logging: disabled
+  - override hydra/launcher: submitit_slurm
   - _self_
 
 hydra:
+#  setup for slurm
+  launcher:
+    timeout_min: 120
+    cpus_per_task: 1
+    mem_gb: 2
+    additional_parameters: {"partition": "gpu", "gres": "gpu:titanrtx:1"}
+    array_parallelism: 8
+
   run:
     dir: .
   output_subdir: null

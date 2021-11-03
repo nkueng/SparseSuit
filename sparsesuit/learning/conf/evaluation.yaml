@@ -1,10 +1,10 @@
 evaluation:
-  experiment: 2110221618-SSP_baseline
+  experiment: 2111021102-SSP_baseline_finetuned
   past_frames: 20
   future_frames: 5
   pos_err: False
   eval_dataset:
-    source: RKK_STUDIO
+    source: RKK_VICON
     fps: 100
     sensor_config: SSP
 #    synthesis:

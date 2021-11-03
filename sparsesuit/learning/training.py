@@ -8,7 +8,7 @@ import hydra
 import submitit
 import numpy as np
 import torch
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf, open_dict
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
@@ -34,7 +34,7 @@ class Trainer:
         # experiment setup
         if finetune:
             # load pre-trained model
-            exp_path = os.path.join(paths.RUN_PATH, cfg.experiment)
+            exp_path = os.path.join(paths.RUN_PATH, cfg.finetune_experiment)
             train_config = utils.load_config(exp_path).experiment
             train_config.name += "_finetuned"
             # make sure model I/O is the same as for finetuning and training
@@ -46,7 +46,10 @@ class Trainer:
             # use finetuning instead of training dataset
             ds_config = cfg.finetune_dataset
             train_config.finetune_dataset = cfg.finetune_dataset
-            self.cfg.experiment = train_config
+            OmegaConf.set_struct(cfg, True)
+            with open_dict(cfg):
+                cfg.experiment = cfg.finetune_experiment
+            self.cfg = cfg
         else:
             train_config = cfg.experiment
             ds_config = train_config.train_dataset
@@ -69,7 +72,17 @@ class Trainer:
         self.num_workers = self.hyper_params.num_workers
         self.pin_memory = self.hyper_params.pin_memory
 
-        self.traintime_noise = cfg.traintime_noise
+        if "traintime_noise" in cfg:
+            self.traintime_noise = cfg.traintime_noise
+            # add noise simulator
+            import pymusim
+
+            sensor_opt = pymusim.SensorOptions()
+            sensor_opt.set_gravity_axis(-1)  # disable additive gravity
+            sensor_opt.set_white_noise(0.001)  # corresponds to "more noise"
+            self.sensor = pymusim.BaseSensor(sensor_opt)
+        else:
+            self.traintime_noise = False
 
         # find differences between this experiment and default hyperparams
         def_path = os.path.join(os.getcwd(), "conf/hyperparams")
@@ -233,15 +246,6 @@ class Trainer:
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
         )
-
-        if self.traintime_noise:
-            # add noise simulator
-            import pymusim
-
-            sensor_opt = pymusim.SensorOptions()
-            sensor_opt.set_gravity_axis(-1)  # disable additive gravity
-            sensor_opt.set_white_noise(0.001)
-            self.sensor = pymusim.BaseSensor(sensor_opt)
 
     def train(self):
         self.logger.info("Starting experiment: {}".format(self.experiment_name))
@@ -506,12 +510,31 @@ def do_training(cfg: DictConfig):
         # shutil.rmtree(trainer.model_path)
         sys.exit()
 
+    # option to finetune immediately after pre-training
+    if cfg.finetune:
+        # load default finetuning configurations
+        ft_cfg_path = os.path.join(
+            utils.get_project_folder(), "learning/conf/finetuning.yaml"
+        )
+        ft_cfg = OmegaConf.load(ft_cfg_path)
+        ft_hyper_cfg_path = os.path.join(
+            utils.get_project_folder(),
+            "learning/conf/hyperparams/default_finetune.yaml",
+        )
+        ft_hyper_cfg = OmegaConf.load(ft_hyper_cfg_path)
+        # adapt to training experiment
+        ft_cfg.finetune_experiment = trainer.experiment_name
+        ft_cfg.hyperparams = ft_hyper_cfg
+        finetuner = Trainer(cfg=ft_cfg, finetune=True)
+        finetuner.train()
+        trainer.experiment_name = finetuner.experiment_name
+
     # load default evaluation configuration
     eval_cfg_path = os.path.join(
         utils.get_project_folder(), "learning/conf/evaluation.yaml"
     )
     eval_cfg = OmegaConf.load(eval_cfg_path)
-    # adapt evaluation dataset to training dataset
+    # adapt evaluation config to experiment name
     eval_cfg.evaluation.experiment = trainer.experiment_name
     # eval_cfg.evaluation.eval_dataset = cfg.experiment.train_dataset
     # keep debugging flag but force without visualization

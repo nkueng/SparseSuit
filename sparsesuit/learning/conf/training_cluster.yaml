@@ -1,6 +1,7 @@
 debug: False
 gpu: True
 traintime_noise: False
+finetune: True
 defaults:
  - experiment: SSP_baseline
  - hyperparams: default
@@ -18,7 +19,7 @@ hydra:
     cpus_per_task: 1
     mem_gb: 2
     additional_parameters: {"partition": "gpu", "gres": "gpu:titanrtx:1"}
-    array_parallelism: 4
+    array_parallelism: 8
 
   run:
     dir: .
