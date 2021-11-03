@@ -44,13 +44,14 @@ class Trainer:
                 == train_config.train_dataset.sensor_config
             )
             assert cfg.finetune_dataset.fps == train_config.train_dataset.fps
-            # overwrite training with finetuning config
-            train_config.train_dataset = cfg.finetune_dataset
+            # use finetuning instead of training dataset
+            ds_config = cfg.finetune_dataset
+            train_config.finetune_dataset = cfg.finetune_dataset
             self.cfg.experiment = train_config
         else:
             train_config = cfg.experiment
+            ds_config = train_config.train_dataset
 
-        ds_config = train_config.train_dataset
         self.exp_name = "debug" if cfg.debug else train_config.name
         train_sens = train_config.sensors.names
         # num_train_sens = train_config.count
@@ -68,6 +69,8 @@ class Trainer:
         self.use_stats = self.hyper_params.use_stats
         self.num_workers = self.hyper_params.num_workers
         self.pin_memory = self.hyper_params.pin_memory
+
+        self.traintime_noise = cfg.traintime_noise
 
         # find differences between this experiment and default hyperparams
         def_path = os.path.join(os.getcwd(), "conf/hyperparams")
@@ -115,16 +118,13 @@ class Trainer:
         utils.write_config(path=self.model_path, config=cfg)
 
         # get dataset required by configuration
-        ds_dir = utils.ds_path_from_config(
-            train_config.train_dataset, "training", cfg.debug
-        )
+        ds_dir = utils.ds_path_from_config(ds_config, "training", cfg.debug)
         self.stats = {}
         if self.train_on_processed:
             # training on "processed" data with zero mean and unit variance
-            ds_dir += "_nn"
+            ds_dir += "n"
         else:
             # training on normalized data
-            ds_dir += "_n"
             stats_path = os.path.join(ds_dir, "stats.npz")
             if self.use_stats:
                 # "process" data for zero mean and unit variance with statistics
@@ -235,6 +235,15 @@ class Trainer:
             pin_memory=self.pin_memory,
         )
 
+        if self.traintime_noise:
+            # add noise simulator
+            import pymusim
+
+            sensor_opt = pymusim.SensorOptions()
+            sensor_opt.set_gravity_axis(-1)  # disable additive gravity
+            sensor_opt.set_white_noise(0.001)
+            self.sensor = pymusim.BaseSensor(sensor_opt)
+
     def train(self):
         self.logger.info("Starting experiment: {}".format(self.experiment_name))
         # train and validate model iteratively
@@ -266,6 +275,9 @@ class Trainer:
                 # plt.ylabel("Acceleration [m/s²]")
                 # plt.legend(["x", "y", "z"])
                 # fig.show()
+
+                if self.traintime_noise:
+                    ori = self.make_noisy(ori)
 
                 input_vec, target_vec = utils.assemble_input_target(
                     ori, acc, pose, self.sens_ind, self.stats
@@ -321,6 +333,16 @@ class Trainer:
         self.write_config(duration, epoch, best_valid_loss)
 
         self.writer.close()
+
+    def make_noisy(self, ori):
+        # TODO: convert from np to torch
+        num_sensors = ori.shape[2] // 9
+        ori_mat = utils.copy2cpu(ori.reshape([-1, 9]))
+        ori_aa = utils.rot_matrix_to_aa(ori_mat)
+        ori_noisy = np.array(self.sensor.transform_measurement(ori_aa))
+        oir_noisy_mat = utils.aa_to_rot_matrix(ori_noisy)
+        orientation = oir_noisy_mat.reshape(ori.shape)
+        return torch.Tensor(orientation)
 
     def write_config(self, duration, epoch, best_valid_loss):
         # load training configuration

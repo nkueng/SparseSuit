@@ -53,9 +53,8 @@ class Evaluator:
             exp_config.train_dataset, "evaluation", cfg.debug
         )
         if self.train_config.hyperparameters.train_on_processed:
-            train_ds_path += "_nn"
-        else:
-            train_ds_path += "_n"
+            train_ds_path += "n"
+
         train_ds_config = utils.load_config(train_ds_path).dataset
         self.pred_trgt_joints = train_ds_config.pred_trgt_joints
         input_sensor_names = exp_config.sensors.names
@@ -75,36 +74,6 @@ class Evaluator:
         self.model.eval()
 
         self.sensor_config = self.train_config.experiment.sensors.sensor_config
-        # ds_dir = utils.ds_path_from_config(cfg.evaluation, cfg.debug)
-        # if self.eval_config.dataset == "synthetic":
-        #     ds_dir = paths.AMASS_PATH
-        #
-        #     if cfg.debug:
-        #         ds_dir += "_debug"
-        #
-        #     if self.sensor_config == "SSP":
-        #         ds_dir += "_SSP"
-        #
-        #     elif self.sensor_config == "MVN":
-        #         ds_dir += "_MVN"
-        #
-        #     else:
-        #         raise NameError("Invalid configuration. Aborting!")
-        #
-        #     if self.eval_config.noise:
-        #         ds_dir += "_noisy"
-        #     ds_dir += "_nn"
-
-        # elif self.eval_config.dataset == "real":
-        #
-        #     if self.sensor_config == "MVN":
-        #         ds_dir = paths.DIP_17_NN_PATH
-        #
-        #     elif self.sensor_config == "SSP":
-        #         ds_dir = paths.RKK_STUDIO_19_NN_PATH
-        #
-        #     else:
-        #         raise NameError("Invalid configuration. Aborting!")
 
         # get evaluation dataset
         ds_dir = utils.ds_path_from_config(
@@ -114,9 +83,8 @@ class Evaluator:
         self.pose_mean = 0
         self.pose_std = 1
         if self.train_config.hyperparameters.train_on_processed:
-            ds_dir += "_nn"
+            ds_dir += "n"
         else:
-            ds_dir += "_n"
             # load test dataset statistics
             if self.train_config.hyperparameters.use_stats:
                 stats_path = os.path.join(ds_dir, "stats.npz")
@@ -134,10 +102,6 @@ class Evaluator:
         test_ds_sens = test_ds_config.normalized_sensors
         train_sens = self.train_config.experiment.sensors.names
         self.sens_ind = [test_ds_sens.index(sens) for sens in train_sens]
-        # sens_ind_mask = [sens in train_sens for sens in test_ds_sens]
-        # sens_ind_alt = [
-        #     item.index() for keep, item in zip(sens_ind_mask, test_ds_sens) if keep
-        # ]
 
         test_ds_path = os.path.join(ds_dir, "test")
         test_ds = utils.BigDataset(test_ds_path, test_ds_size)

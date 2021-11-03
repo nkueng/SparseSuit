@@ -29,10 +29,6 @@ def load_config(path, file_name="config.yaml"):
 
 
 def ds_path_from_config(cfg, caller, debug=False):
-    # if "dataset" in config:
-    #     cfg = config.dataset
-    # else:
-    #     return None
 
     if caller in ["synthesis", "normalization"]:
         path = os.path.join(paths.SOURCE_PATH, cfg.source)
@@ -53,6 +49,9 @@ def ds_path_from_config(cfg, caller, debug=False):
 
     if debug:
         params.append("debug")
+
+    if caller in ["training", "evaluation"]:
+        params.append("n")
 
     # make into one string
     ds_name = "_".join(params)
@@ -179,7 +178,7 @@ def compute_jerk(data, delta: int, fps: int):
     return np.linalg.norm(res, axis=2)
 
 
-def make_deterministic(seed):
+def make_deterministic(seed=14):
     random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)

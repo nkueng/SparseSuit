@@ -101,8 +101,8 @@ class Normalizer:
 
         self.src_dir = src_folder
         norm_folder = utils.ds_path_from_config(cfg.dataset, "training", self.debug)
-        self.norm_dir = norm_folder + "_n"
-        self.trgt_dir = norm_folder + "_nn"
+        self.norm_dir = norm_folder
+        self.trgt_dir = norm_folder + "n"
         # clean up target directories to avoid old leftovers
         if os.path.isdir(self.norm_dir):
             shutil.rmtree(self.norm_dir)
@@ -440,9 +440,11 @@ class Normalizer:
                     file_list.append(os.path.join(root, file))
 
         file_list = sorted(file_list)
+        # DEBUG
+        # file_list = file_list[245:]
         for file in file_list:
             # DEBUG
-            # file = file_list[215]
+            # file = file_list[260]
 
             # load and extract raw data from this file
             try:
@@ -461,9 +463,6 @@ class Normalizer:
             # add this asset to the dataset statistics
             self.save_asset_stats(norm_data)
 
-            if self.visualize:
-                self.visualize_norm_asset(norm_data)
-
             # determine name of file for normalized asset
             subject_i = file.split("/")[-2]
             motion_type_i = file.split("/")[-1].split(".")[0]
@@ -480,6 +479,9 @@ class Normalizer:
             self.logger.info(
                 "Normalized {}/{} for {}".format(subject_i, motion_type_i, dataset_name)
             )
+
+            if self.visualize:
+                self.visualize_norm_asset(norm_data)
 
         # compute and save stats
         self.stats["ori_mean"] = self.stats_ori.mean
