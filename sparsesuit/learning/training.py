@@ -73,14 +73,15 @@ class Trainer:
         self.pin_memory = self.hyper_params.pin_memory
 
         if "traintime_noise" in cfg:
-            self.traintime_noise = cfg.traintime_noise
-            # add noise simulator
-            import pymusim
+            if cfg.traintime_noise:
+                self.traintime_noise = cfg.traintime_noise
+                # add noise simulator
+                import pymusim
 
-            sensor_opt = pymusim.SensorOptions()
-            sensor_opt.set_gravity_axis(-1)  # disable additive gravity
-            sensor_opt.set_white_noise(0.001)  # corresponds to "more noise"
-            self.sensor = pymusim.BaseSensor(sensor_opt)
+                sensor_opt = pymusim.SensorOptions()
+                sensor_opt.set_gravity_axis(-1)  # disable additive gravity
+                sensor_opt.set_white_noise(cfg.noisef)  # corresponds to "more noise"
+                self.sensor = pymusim.BaseSensor(sensor_opt)
         else:
             self.traintime_noise = False
 
