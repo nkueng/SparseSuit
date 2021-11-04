@@ -37,7 +37,7 @@ class Trainer:
             exp_path = os.path.join(paths.RUN_PATH, cfg.finetune_experiment)
             train_config = utils.load_config(exp_path).experiment
             train_config.name += "_finetuned"
-            # make sure model I/O is the same as for finetuning and training
+            # make sure model I/O is the same for finetuning and training
             assert (
                 cfg.finetune_dataset.sensor_config
                 == train_config.train_dataset.sensor_config
@@ -46,9 +46,10 @@ class Trainer:
             # use finetuning instead of training dataset
             ds_config = cfg.finetune_dataset
             train_config.finetune_dataset = cfg.finetune_dataset
-            OmegaConf.set_struct(cfg, True)
+            # OmegaConf.set_struct(cfg, True)
             with open_dict(cfg):
-                cfg.experiment = cfg.finetune_experiment
+                cfg.experiment = train_config
+                # cfg.experiment.name = cfg.finetune_experiment
             self.cfg = cfg
         else:
             train_config = cfg.experiment
@@ -157,32 +158,6 @@ class Trainer:
         assert os.path.exists(
             ds_dir
         ), "Source directory {} does not exist! Check configuration!".format(ds_dir)
-
-        # if train_config.dataset == "synthetic":
-        #
-        #     if train_config.config == "SSP":
-        #         ds_dir += "_SSP"
-        #
-        #     elif train_config.config == "MVN":
-        #         ds_dir += "_MVN"
-        #
-        #     else:
-        #         raise NameError("Invalid configuration. Aborting!")
-        #
-        #     if train_config.noise:
-        #         ds_dir += "_noisy"
-        #     ds_dir += "_nn"
-
-        # elif train_config.dataset == "real":
-        #
-        #     if train_config.config == "MVN":
-        #         ds_dir = paths.DIP_17_NN_PATH
-        #
-        #     if train_config.config == "SSP":
-        #         ds_dir = paths.RKK_STUDIO_19_NN_PATH
-        #
-        #     else:
-        #         raise NameError("Invalid configuration. Aborting!")
 
         # get training and validation dataset paths
         self.train_ds_path = os.path.join(ds_dir, "training")
@@ -338,8 +313,7 @@ class Trainer:
         self.writer.close()
 
     def make_noisy(self, ori):
-        # TODO: convert from np to torch
-        num_sensors = ori.shape[2] // 9
+        # convert from np to torch
         ori_mat = utils.copy2cpu(ori.reshape([-1, 9]))
         ori_aa = utils.rot_matrix_to_aa(ori_mat)
         ori_noisy = np.array(self.sensor.transform_measurement(ori_aa))
