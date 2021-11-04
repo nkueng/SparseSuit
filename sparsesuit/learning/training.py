@@ -72,6 +72,7 @@ class Trainer:
         self.num_workers = self.hyper_params.num_workers
         self.pin_memory = self.hyper_params.pin_memory
 
+        self.traintime_noise = False
         if "traintime_noise" in cfg:
             if cfg.traintime_noise:
                 self.traintime_noise = cfg.traintime_noise
@@ -82,8 +83,6 @@ class Trainer:
                 sensor_opt.set_gravity_axis(-1)  # disable additive gravity
                 sensor_opt.set_white_noise(cfg.noisef)  # corresponds to "more noise"
                 self.sensor = pymusim.BaseSensor(sensor_opt)
-        else:
-            self.traintime_noise = False
 
         # find differences between this experiment and default hyperparams
         def_path = os.path.join(os.getcwd(), "conf/hyperparams")
