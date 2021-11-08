@@ -41,11 +41,12 @@ def ds_path_from_config(cfg, caller, debug=False):
 
     params = [cfg.sensor_config, "fps" + str(cfg.fps)]
     if "synthesis" in cfg:
-        # get all parameters related to synthesis
-        syn_params = cfg.synthesis
-        params.append("accn" + str(syn_params.acc_noise))
-        params.append("gyron" + str(syn_params.gyro_noise))
-        params.append("accd" + str(syn_params.acc_delta))
+        if cfg.synthesis != "None":
+            # get all parameters related to synthesis
+            syn_params = cfg.synthesis
+            params.append("accn" + str(syn_params.acc_noise))
+            params.append("gyron" + str(syn_params.gyro_noise))
+            params.append("accd" + str(syn_params.acc_delta))
 
     if debug:
         params.append("debug")

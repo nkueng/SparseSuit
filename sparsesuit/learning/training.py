@@ -82,7 +82,7 @@ class Trainer:
 
                 sensor_opt = pymusim.SensorOptions()
                 sensor_opt.set_gravity_axis(-1)  # disable additive gravity
-                sensor_opt.set_white_noise(cfg.noisef)  # corresponds to "more noise"
+                sensor_opt.set_white_noise(cfg.noise)  # corresponds to "more noise"
                 self.sensor = pymusim.BaseSensor(sensor_opt)
 
         # find differences between this experiment and default hyperparams
@@ -480,15 +480,26 @@ def do_training(cfg: DictConfig):
     if paths.ON_CLUSTER:
         submitit.JobEnvironment()
 
-    try:
-        trainer = Trainer(cfg=cfg)
-        trainer.train()
-    except KeyboardInterrupt:
-        # print("Interrupted. Deleting model_folder!")
-        # shutil.rmtree(trainer.model_path)
-        sys.exit()
+    # train model based on config
+    trainer = Trainer(cfg=cfg)
+    trainer.train()
 
-    # option to finetune immediately after pre-training
+    # evaluate pre-trained model on synthetic data
+    # load default evaluation configuration
+    eval_cfg_path = os.path.join(
+        utils.get_project_folder(), "learning/conf/evaluation.yaml"
+    )
+    eval_cfg = OmegaConf.load(eval_cfg_path)
+    # adapt evaluation config to experiment name and evaluate on same data
+    eval_cfg.evaluation.experiment = trainer.experiment_name
+    eval_cfg.evaluation.eval_dataset = cfg.experiment.train_dataset
+    # keep debugging flag but force without visualization
+    eval_cfg.debug = cfg.debug
+    eval_cfg.visualize = False
+    evaluator = Evaluator(cfg=eval_cfg)
+    evaluator.evaluate()
+
+    # option to finetune directly after pre-training
     if cfg.finetune:
         # load default finetuning configurations
         ft_cfg_path = os.path.join(
@@ -507,19 +518,18 @@ def do_training(cfg: DictConfig):
         finetuner.train()
         trainer.experiment_name = finetuner.experiment_name
 
-    # load default evaluation configuration
-    eval_cfg_path = os.path.join(
-        utils.get_project_folder(), "learning/conf/evaluation.yaml"
-    )
-    eval_cfg = OmegaConf.load(eval_cfg_path)
-    # adapt evaluation config to experiment name
-    eval_cfg.evaluation.experiment = trainer.experiment_name
-    # eval_cfg.evaluation.eval_dataset = cfg.experiment.train_dataset
-    # keep debugging flag but force without visualization
-    eval_cfg.debug = cfg.debug
-    eval_cfg.visualize = False
-    evaluator = Evaluator(cfg=eval_cfg)
-    evaluator.evaluate()
+        # evaluate fine-tuned model on real data
+        # load default evaluation configuration
+        eval_cfg = OmegaConf.load(eval_cfg_path)
+        # adapt evaluation config to experiment name
+        eval_cfg.evaluation.experiment = trainer.experiment_name
+        eval_cfg.evaluation.eval_dataset.source = "RKK_VICON"
+        eval_cfg.evaluation.eval_dataset.synthesis = "None"
+        # keep debugging flag but force without visualization
+        eval_cfg.debug = cfg.debug
+        eval_cfg.visualize = False
+        ft_evaluator = Evaluator(cfg=eval_cfg)
+        ft_evaluator.evaluate()
 
 
 if __name__ == "__main__":
