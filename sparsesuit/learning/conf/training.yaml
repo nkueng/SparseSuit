@@ -1,9 +1,10 @@
 debug: False
 gpu: True
-traintime_noise: True
+traintime_noise: False
+noise: 0.001
 finetune: True
 defaults:
-  - experiment: SSP_baseline
+  - experiment: SSP_19
   - hyperparams: default
   - override hydra/job_logging: disabled
   - override hydra/hydra_logging: disabled
