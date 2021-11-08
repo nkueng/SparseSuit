@@ -114,6 +114,9 @@ class Trainer:
         for k, v in hyperparams_diff.items():
             self.experiment_name += "-" + k + str(v)
 
+        if "rkk_fraction" in ds_config:
+            self.experiment_name += "-fraction" + str(ds_config.rkk_fraction)
+
         self.model_path = os.path.join(paths.RUN_PATH, self.experiment_name)
         self.writer = SummaryWriter(self.model_path)
 

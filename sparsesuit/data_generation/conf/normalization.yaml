@@ -1,7 +1,8 @@
 dataset:
-  source: RKK_STUDIO
+  source: RKK_VICON
   sensor_config: SSP
   fps: 100
+  rkk_fraction: 1  # excludes walking from training dataset
 #  synthesis:
 #    acc_noise: 0
 #    gyro_noise: 0

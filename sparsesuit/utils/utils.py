@@ -52,6 +52,8 @@ def ds_path_from_config(cfg, caller, debug=False):
 
     if caller in ["training", "evaluation"]:
         params.append("n")
+        if "rkk_fraction" in cfg:
+            params.append(str(cfg.rkk_fraction))
 
     # make into one string
     ds_name = "_".join(params)

@@ -3,6 +3,7 @@ finetune_dataset:
   source: RKK_VICON
   sensor_config: SSP
   fps: 100
+  rkk_fraction: 1
 
 debug: False
 gpu: True

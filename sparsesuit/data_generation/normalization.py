@@ -92,13 +92,6 @@ class Normalizer:
         else:
             raise NameError("Invalid dataset configuration. Aborting!")
 
-        # if self.dataset_type == "synthetic":
-        # src_folder += "_acc" + str(cfg.dataset.acc_delta)
-
-        # if "noise" in cfg.dataset:
-        #     if cfg.dataset.noise:
-        #         src_folder += "_noisy"
-
         self.src_dir = src_folder
         norm_folder = utils.ds_path_from_config(cfg.dataset, "training", self.debug)
         self.norm_dir = norm_folder
@@ -109,6 +102,11 @@ class Normalizer:
         if os.path.isdir(self.trgt_dir):
             shutil.rmtree(self.trgt_dir)
         self.dataset_names = ["training", "validation", "test"]
+
+        # if requested, keep specific motions away from RKK_ datasets
+        self.rkk_fraction = 0
+        if "rkk_fraction" in cfg.dataset:
+            self.rkk_fraction = cfg.dataset.rkk_fraction
 
         # visualization setup
         if self.visualize:
@@ -322,7 +320,7 @@ class Normalizer:
             else:
                 dataset_name = self.dataset_names[2]
         else:
-            # check for subjects in test set
+            # use dataset-mapping to find which dataset this assets belongs to
             dataset_name = self.dataset_mapping.get(subject_i)
             if dataset_name is None:
                 # check for gait sequences in RKK_STUDIO
@@ -344,8 +342,6 @@ class Normalizer:
                     else:
                         # if subject + motion_type is not in dict, it belongs to the training dataset
                         dataset_name = "training"
-                else:
-                    stop_here = True
 
         return dataset_name
 
@@ -472,6 +468,18 @@ class Normalizer:
 
             # figure out which kind of dataset this asset belongs to
             dataset_name = self.determine_dataset(subject_i, motion_type_i)
+
+            # discard unwanted sequences in training/validation split
+            if self.rkk_fraction != 0:
+                if dataset_name != "test":
+                    motion_idx = motion_type_i.split("_")[0]
+                    if self.rkk_fraction == int(motion_idx):
+                        print(
+                            "Motions similar to {} are used for evaluation only. Skipping!".format(
+                                file
+                            )
+                        )
+                        continue
 
             # save asset in corresponding dataset
             self.save_asset(norm_data, file_name, dataset_name)
