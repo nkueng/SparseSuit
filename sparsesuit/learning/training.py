@@ -115,7 +115,8 @@ class Trainer:
             self.experiment_name += "-" + k + str(v)
 
         if "rkk_fraction" in ds_config:
-            self.experiment_name += "-fraction" + str(ds_config.rkk_fraction)
+            if ds_config.rkk_fraction != 0:
+                self.experiment_name += "-fraction" + str(ds_config.rkk_fraction)
 
         self.model_path = os.path.join(paths.RUN_PATH, self.experiment_name)
         self.writer = SummaryWriter(self.model_path)
