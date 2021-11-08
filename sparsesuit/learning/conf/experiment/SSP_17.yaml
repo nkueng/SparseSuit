@@ -1,9 +1,11 @@
-name: 15_back_none
+name: SSP_17
 
 sensors:
   sensor_config: SSP
-  sensor_count: 15
+  sensor_count: 17
   names:
+  - left_collar
+  - right_collar
   - head
   - left_shoulder
   - right_shoulder

@@ -1,20 +1,12 @@
-name: 15_back_none
+name: SSP_7
 
 sensors:
   sensor_config: SSP
-  sensor_count: 15
+  sensor_count: 7
   names:
   - head
-  - left_shoulder
-  - right_shoulder
-  - left_elbow
-  - right_elbow
   - left_wrist
   - right_wrist
-  - left_hip
-  - right_hip
-  - left_knee
-  - right_knee
   - left_ankle
   - right_ankle
 

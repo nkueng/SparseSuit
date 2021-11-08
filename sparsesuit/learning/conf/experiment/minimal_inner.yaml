@@ -1,4 +1,4 @@
-name: minimal_inner_no_noise
+name: minimal_inner
 
 sensors:
   sensor_config: SSP
