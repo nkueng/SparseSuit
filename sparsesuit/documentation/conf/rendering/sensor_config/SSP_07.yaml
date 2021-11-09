@@ -1,0 +1,17 @@
+defaults:
+  - sensor_config
+
+name: sensor_config_back_upper
+sensors:
+ - left_pelvis
+ - right_pelvis
+ - head
+ - left_shoulder
+ - right_shoulder
+ - left_wrist
+ - right_wrist
+ - left_hip
+ - right_hip
+ - left_ankle
+ - right_ankle
+

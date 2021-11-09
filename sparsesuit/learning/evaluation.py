@@ -52,7 +52,14 @@ class Evaluator:
         train_ds_path = utils.ds_path_from_config(
             exp_config.train_dataset, "evaluation", cfg.debug
         )
-        if self.train_config.hyperparameters.train_on_processed:
+        if "hyperparameters" in self.train_config:
+            self.train_hyperparams = self.train_config.hyperparameters
+        elif "hyperparams" in self.train_config:
+            self.train_hyperparams = self.train_config.hyperparams
+        else:
+            raise NameError
+
+        if self.train_hyperparams.train_on_processed:
             train_ds_path += "n"
 
         train_ds_config = utils.load_config(train_ds_path).dataset
@@ -82,11 +89,11 @@ class Evaluator:
         self.stats = {}
         self.pose_mean = 0
         self.pose_std = 1
-        if self.train_config.hyperparameters.train_on_processed:
+        if self.train_hyperparams.train_on_processed:
             ds_dir += "n"
         else:
             # load test dataset statistics
-            if self.train_config.hyperparameters.use_stats:
+            if self.train_hyperparams.use_stats:
                 stats_path = os.path.join(ds_dir, "stats.npz")
                 with np.load(stats_path, allow_pickle=True) as data:
                     self.stats = dict(data)
@@ -333,7 +340,7 @@ class Evaluator:
         # compile target config to dump with model checkpoint
         trgt_config = OmegaConf.create()
         trgt_config.experiment = self.train_config.experiment
-        trgt_config.hyperparameters = self.train_config.hyperparameters
+        trgt_config.hyperparameters = self.train_hyperparams
         trgt_config.evaluation = eval_config
         # trgt_config.dataset = self.train_config.experiment.train_dataset
 
