@@ -31,12 +31,14 @@ def render_from_config(config: DictConfig):
     # decide on pose
     if cfg.use_relaxed_pose:
         poses_padded = smpl_helpers.generate_relaxed_pose()
+        cfg.frame_range = [0]
 
     elif cfg.name == "leg_raise":
         poses_padded = create_leg_raise_sequence()
+        cfg.frame_range = [0]
 
     # load poses from requested dataset
-    if "dataset" in cfg:
+    elif "dataset" in cfg:
         ds_path = utils.ds_path_from_config(cfg.dataset, "training")
 
         filelist = []

@@ -1,12 +1,12 @@
 defaults:
   - sensor_config
 
-name: sensor_config_back_upper
+name: SSP_19
 sensors:
  - left_pelvis
  - right_pelvis
-# - left_back
-# - right_back
+ - left_back
+ - right_back
  - left_collar
  - right_collar
  - head
