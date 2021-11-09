@@ -471,11 +471,20 @@ class Normalizer:
 
             # discard unwanted sequences in training/validation split
             if self.rkk_fraction != 0:
+                motion_idx = motion_type_i.split("_")[0]
                 if dataset_name != "test":
-                    motion_idx = motion_type_i.split("_")[0]
                     if self.rkk_fraction == int(motion_idx):
                         print(
                             "Motions similar to {} are used for evaluation only. Skipping!".format(
+                                file
+                            )
+                        )
+                        continue
+                else:
+                    # leave motion in test set only if same as fraction type
+                    if self.rkk_fraction != int(motion_idx):
+                        print(
+                            "Motions similar to {} are not used for evaluation. Skipping!".format(
                                 file
                             )
                         )

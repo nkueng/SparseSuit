@@ -58,9 +58,9 @@ DIP_IMU_MAPPING = {
 RKK_STUDIO_MAPPING = {
     "05": "test",
     "01/3_Sidestep_take-7": "validation",
-    "03/1_Gait_take-3": "validation",
-    "04/5_Jump_take-9": "validation",
-    "02/2_Run_take-1": "validation",
+    "02/1_Gait_take-3": "validation",
+    "03/5_Jump_take-9": "validation",
+    "04/2_Run_take-1": "validation",
     "01/4_Sway_take-2": "validation",
 }
 RKK_VICON_MAPPING = RKK_STUDIO_MAPPING
