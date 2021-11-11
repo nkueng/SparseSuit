@@ -324,18 +324,21 @@ class Trainer:
 
     def make_noisy(self, ori, acc):
         # add noise to orientation
-        ori_mat = utils.copy2cpu(ori.reshape([-1, 9]))
-        ori_aa = utils.rot_matrix_to_aa(ori_mat)
-        ori_noisy = np.array(self.ori_noise.transform_measurement(ori_aa))
-        oir_noisy_mat = utils.aa_to_rot_matrix(ori_noisy)
-        orientation = oir_noisy_mat.reshape(ori.shape)
+        ori_mat = ori.reshape([-1, 3, 3])
+        noise_rot_aa = np.array(
+            self.ori_noise.transform_measurement(np.zeros([len(ori_mat), 3]))
+        )
+        noise_rot_mat = utils.aa_to_rot_matrix(noise_rot_aa).reshape([-1, 3, 3])
+        ori_mat_noisy = np.einsum("ijk,ikl->ijl", noise_rot_mat, ori_mat)
+        orientation = ori_mat_noisy.reshape(ori.shape)
 
         # add noise to acceleration
-        accel_vec = utils.copy2cpu(acc.reshape([-1, 3]))
-        accel_noisy = np.array(self.acc_noise.transform_measurement(accel_vec))
-        acceleration = accel_noisy.reshape(acc.shape)
+        noise_vec = np.array(
+            self.acc_noise.transform_measurement(np.zeros([torch.numel(acc) // 3, 3]))
+        )
+        acc += noise_vec.reshape(acc.shape)
 
-        return torch.Tensor(orientation), torch.Tensor(acceleration)
+        return torch.Tensor(orientation), acc
 
     def write_config(self, duration, epoch, best_valid_loss):
         # load training configuration
