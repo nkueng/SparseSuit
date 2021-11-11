@@ -74,16 +74,22 @@ class Trainer:
         self.pin_memory = self.hyper_params.pin_memory
 
         self.traintime_noise = False
-        if "traintime_noise" in cfg:
-            if cfg.traintime_noise:
-                self.traintime_noise = cfg.traintime_noise
+        if "traintime_noise" in cfg.hyperparams:
+            if cfg.hyperparams.traintime_noise:
+                self.traintime_noise = cfg.hyperparams.traintime_noise
                 # add noise simulator
                 import pymusim
 
                 sensor_opt = pymusim.SensorOptions()
                 sensor_opt.set_gravity_axis(-1)  # disable additive gravity
-                sensor_opt.set_white_noise(cfg.noise)  # corresponds to "more noise"
-                self.sensor = pymusim.BaseSensor(sensor_opt)
+
+                # noise for orientation
+                sensor_opt.set_white_noise(cfg.hyperparams.ori_noise)
+                self.ori_noise = pymusim.BaseSensor(sensor_opt)
+
+                # noise for acceleration
+                sensor_opt.set_white_noise(cfg.hyperparams.acc_noise)
+                self.acc_noise = pymusim.BaseSensor(sensor_opt)
 
         # find differences between this experiment and default hyperparams
         def_path = os.path.join(os.getcwd(), "conf/hyperparams")
@@ -259,7 +265,7 @@ class Trainer:
                 # fig.show()
 
                 if self.traintime_noise:
-                    ori = self.make_noisy(ori)
+                    ori, acc = self.make_noisy(ori, acc)
 
                 input_vec, target_vec = utils.assemble_input_target(
                     ori, acc, pose, self.sens_ind, self.stats
@@ -316,14 +322,20 @@ class Trainer:
 
         self.writer.close()
 
-    def make_noisy(self, ori):
-        # convert from np to torch
+    def make_noisy(self, ori, acc):
+        # add noise to orientation
         ori_mat = utils.copy2cpu(ori.reshape([-1, 9]))
         ori_aa = utils.rot_matrix_to_aa(ori_mat)
-        ori_noisy = np.array(self.sensor.transform_measurement(ori_aa))
+        ori_noisy = np.array(self.ori_noise.transform_measurement(ori_aa))
         oir_noisy_mat = utils.aa_to_rot_matrix(ori_noisy)
         orientation = oir_noisy_mat.reshape(ori.shape)
-        return torch.Tensor(orientation)
+
+        # add noise to acceleration
+        accel_vec = utils.copy2cpu(acc.reshape([-1, 3]))
+        accel_noisy = np.array(self.acc_noise.transform_measurement(accel_vec))
+        acceleration = accel_noisy.reshape(acc.shape)
+
+        return torch.Tensor(orientation), torch.Tensor(acceleration)
 
     def write_config(self, duration, epoch, best_valid_loss):
         # load training configuration
