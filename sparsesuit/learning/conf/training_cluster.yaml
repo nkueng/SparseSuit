@@ -1,6 +1,5 @@
 debug: False
 gpu: True
-traintime_noise: False
 finetune: True
 defaults:
  - experiment: SSP_19
