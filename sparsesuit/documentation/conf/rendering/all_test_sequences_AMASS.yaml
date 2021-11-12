@@ -1,8 +1,15 @@
 defaults:
   - default
 
-name: all_test_sequences
-source: AMASS_SSP_nn
+name: all_test_sequences_AMASS
+dataset:
+  source: AMASS
+  sensor_config: SSP
+  fps: 100
+  synthesis:
+    acc_noise: 0
+    gyro_noise: 0
+    acc_delta: 4
 render_width: 800
 body_transparency: 0
 render_every_n_frame: 10

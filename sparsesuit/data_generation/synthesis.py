@@ -60,11 +60,6 @@ class Synthesizer:
 
         assert os.path.exists(self.src_dir)
 
-        # if self.add_noise:
-        #     target_name += "_noisy"
-
-        # target_name += "_acc" + str(self.acc_delta)
-
         self.trgt_dir = utils.ds_path_from_config(cfg.dataset, "synthesis", self.debug)
         self.joint_ids = [sensors.SENS_JOINTS_IDS[sensor] for sensor in self.sens_names]
 
@@ -213,8 +208,7 @@ class Synthesizer:
             self.logger.info("Gender could not be derived. Skipping!")
             return False
         data_out["imu_ori"], data_out["imu_acc"] = self.compute_imu_data(
-            gender,
-            data_out["gt"],
+            gender, data_out["gt"], data_in["betas"][:10]
         )
 
         # trim N pose sequences at beginning and end depending on smoothing factor N
@@ -264,9 +258,15 @@ class Synthesizer:
             sensor_opt.set_white_noise(self.acc_noise)
             sensor = pymusim.BaseSensor(sensor_opt)
 
-            accel_vec = acceleration.reshape([-1, 3])
-            accel_noisy = np.array(sensor.transform_measurement(accel_vec))
-            acceleration = accel_noisy.reshape([-1, len(self.joint_ids), 3])
+            acceleration = torch.Tensor(acceleration)
+            noise_vec = np.array(
+                sensor.transform_measurement(np.zeros([acceleration.size // 3, 3]))
+            )
+            acceleration += noise_vec.reshape(acceleration.shape)
+
+            # accel_vec = acceleration.reshape([-1, 3])
+            # accel_noisy = np.array(sensor.transform_measurement(accel_vec))
+            # acceleration = accel_noisy.reshape([-1, len(self.joint_ids), 3])
 
         # clip acc at sensor saturation value
         if self.acc_saturation is not None:
@@ -286,15 +286,45 @@ class Synthesizer:
             sensor_opt.set_white_noise(self.gyro_noise)
             sensor = pymusim.BaseSensor(sensor_opt)
 
-            ori_mat = orientation.reshape([-1, 9])
-            ori_aa = utils.rot_matrix_to_aa(ori_mat)
-            ori_noisy = np.array(sensor.transform_measurement(ori_aa))
-            oir_noisy_mat = utils.aa_to_rot_matrix(ori_noisy)
-            orientation = oir_noisy_mat.reshape([-1, len(self.joint_ids), 3, 3])
+            # orientation = torch.Tensor(orientation)
+            # t0 = time.perf_counter()
+            ori_mat = orientation.reshape([-1, 3, 3])
+            # ori_mat = utils.copy2cpu(orientation.reshape([-1, 3, 3]))
+            # t1 = time.perf_counter()
+            noise_rot_aa = np.array(
+                sensor.transform_measurement(np.zeros([len(ori_mat), 3]))
+            )
+            # t2 = time.perf_counter()
+            noise_rot_mat = utils.aa_to_rot_matrix(noise_rot_aa).reshape([-1, 3, 3])
+            # t3 = time.perf_counter()
+            ori_mat_noisy = np.einsum("ijk,ikl->ijl", noise_rot_mat, ori_mat)
+            # t4 = time.perf_counter()
+            orientation = ori_mat_noisy.reshape(orientation.shape)
+            # print(
+            #     "Intervals: 1: {}, 2: {}, 3: {}, 4: {}. Total: {}".format(
+            #         t1 - t0, t2 - t1, t3 - t2, t4 - t3, t4 - t0
+            #     )
+            # )
+
+            # t0 = time.perf_counter()
+            # ori_mat = orientation.reshape([-1, 9])
+            # t1 = time.perf_counter()
+            # ori_aa = utils.rot_matrix_to_aa(ori_mat)
+            # t2 = time.perf_counter()
+            # ori_noisy = np.array(sensor.transform_measurement(ori_aa))
+            # t3 = time.perf_counter()
+            # oir_noisy_mat = utils.aa_to_rot_matrix(ori_noisy)
+            # t4 = time.perf_counter()
+            # orientation = oir_noisy_mat.reshape([-1, len(self.joint_ids), 3, 3])
+            # print(
+            #     "Intervals: 1: {}, 2: {}, 3: {}, 4: {}. Total: {}".format(
+            #         t1 - t0, t2 - t1, t3 - t2, t4 - t3, t4 - t0
+            #     )
+            # )
 
         return orientation[self.acc_delta : -self.acc_delta], acceleration
 
-    def compute_imu_data(self, gender, poses):
+    def compute_imu_data(self, gender, poses, betas=None):
 
         # extract poses of all joints (used for orientation of IMUs/body segments)
         batch_size = len(poses)
@@ -314,12 +344,16 @@ class Synthesizer:
                 poses_k, list(sensors.SMPL_JOINT_IDS.values())
             )
 
+            # preparing betas
+            if betas is not None:
+                betas = torch.tile(torch.Tensor(betas), [len(poses_k), 1])
+
             # load relevant smpl model onto GPU if desired
             smpl_model = self.smpl_models[gender].to(self.device)
 
             # do lbs for given poses
             vertices_k, joints_k, rel_tfs_k = smpl_helpers.my_lbs(
-                smpl_model, poses_torch
+                smpl_model, poses_torch, betas
             )
 
             vertices.append(utils.copy2cpu(vertices_k))
