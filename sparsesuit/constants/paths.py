@@ -39,8 +39,11 @@ RKK_STUDIO_19_NN_PATH = os.path.join(DATASET_PATH, "Real/RKK_19_nn")
 # smpl model data
 SMPL_PATH = os.path.join(DATA_PATH, "SMPL_models")
 
-# paths to trained models
+# path to trained models
 RUN_PATH = os.path.join(DATA_PATH, "trained_models")
+
+# path to models in final evaluation
+EVAL_PATH = os.path.join(DATA_PATH, "evaluation_models")
 
 # documentation folder
 DOC_PATH = os.path.join(DATA_PATH, "Documentation")
@@ -81,16 +84,27 @@ RKK_VICON_MAPPING = RKK_STUDIO_MAPPING
 
 AMASS_MAPPING = {
     "ACCAD/Female1Running_c3d_C5-walktorun": "test",
+    "SFU/0017_0017_RunningOnBench002": "test",
+    "DFaust_67/50026_50026_running_on_spot": "test",
     "ACCAD/Male2General_c3d_A2-Sway": "test",
     "BMLhandball/S08_Novice_Trial_upper_right_160": "test",
     "BMLmovi/Subject_25_F_MoSh_Subject_25_F_13": "test",
     "DanceDB/20151003_AndriaMichaelidou_Andria_Annoyed_v1_C3D": "test",
-    "BioMotionLab/NTroje_rub109_0031_rom": "test",
-    "BioMotionLab/NTroje_rub060_0016_sitting2": "test",
-    "TCD/handMocap_ExperimentDatabase_typing_2": "test",
+    "BioMotionLab_NTroje/rub109_0031_rom": "test",
+    "BioMotionLab_NTroje/rub060_0016_sitting2": "test",
+    "TCD_handMocap/ExperimentDatabase_typing_2": "test",
     "KIT/11_RightTurn02": "test",
+    "KIT/348_walking_slow01": "test",
+    "BioMotionLab_NTroje/rub066_0006_normal_walk2": "test",
+    "ACCAD/Female1Walking_c3d_B11-walkturnleft(135)": "test",
     "KIT/317_walking_slow07": "test",
     "KIT/3_jump_up03": "test",
-    "MPI/HDM05_bk_HDM_bk_03-04_03_120": "test",
-    "Eyes_Japan/Dataset_hamada_accident-11-falldown-hamada": "test",
+    "BioMotionLab_NTroje/rub025_0027_jumping1": "test",
+    "Transitions_mocap/mazen_c3d_jumpingjacks_walk": "test",
+    "Transitions_mocap/mazen_c3d_jumpingjacks_jumpinplace": "test",
+    "MPI_HDM05/bk_HDM_bk_03-04_03_120": "test",
+    "Eyes_Japan_Dataset/hamada_accident-11-falldown-hamada": "test",
+    "SSM_synced/20160330_03333_chicken_wings_poses": "test",
 }
+
+AMASS_MAPPING_OVERFIT = {"ACCAD": "test"}

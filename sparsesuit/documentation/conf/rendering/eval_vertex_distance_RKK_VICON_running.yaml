@@ -1,0 +1,40 @@
+defaults:
+  - default
+
+name: eval_vertex_distance_RKK_VICON
+dataset:
+  source: RKK_VICON
+  sensor_config: SSP
+  fps: 100
+models:
+  - 2110291554-SSP_baseline_finetuned
+  - 2111010951-minimal_inner_no_noise_finetuned
+
+assets:
+# [asset_idx, frame_idx]
+  - [1, 500]  # gait
+  - [7, 300]  # gait
+  - [13, 300]  # run
+  - [19, 300]  # run
+  - [23, 300]  # sidestep
+  - [24, 300]  # sidestep
+  - [32, 400] # sway
+  - [38, 500]  # sway
+  - [42, 300]  # jump
+  - [46, 300]  # jump
+body_transparency: 0.0
+show_from_behind: False
+use_default_pose: False
+show_sensors: True
+show_vertex_distance: True
+show_gt: False
+render_frames: 5
+render_every_n_frame: 20
+show_rendering: False
+orthographic_camera: True
+camera_translation: [0, 0.5, 1.75]
+render_width: 800
+make_gif: False
+gif_fps: 15
+
+
