@@ -77,6 +77,8 @@ def my_lbs(
     # make sure everything is on same device (smpl model determines device)
     if pose.device != device:
         pose = pose.to(device)
+    if betas is not None and betas.device != device:
+        betas = betas.to(device)
 
     # if no betas are provided, assume repetition of model betas
     betas = torch.tile(model.betas, [batch_size, 1]) if betas is None else betas
@@ -339,5 +341,12 @@ def generate_initial_pose():
     """
     joint_ind = sensors.SMPL_JOINT_IDS
     pose = np.zeros([sensors.NUM_SMPLX_JOINTS, 3])
+
+    # # collar rotation
+    # rot = utils.rot_mat(-10, "z")
+    # aa = utils.rot_matrix_to_aa(rot.reshape([1, -1])).reshape([3])
+    #
+    # pose[joint_ind["right_collar"]] = aa
+    # pose[joint_ind["left_collar"]] = -aa
 
     return torch.Tensor(pose.reshape([1, -1]))
