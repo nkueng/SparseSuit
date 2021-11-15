@@ -8,8 +8,8 @@ dataset:
   sensor_config: SSP
   fps: 100
 models:
-  - 2110291554-SSP_baseline_finetuned
-  - 2111010951-minimal_inner_no_noise_finetuned
+  - 2111021102-SSP_baseline_finetuned
+  - 2111031407-minimal_inner_no_noise_finetuned
 
 assets:
 # [asset_idx, frame_idx]

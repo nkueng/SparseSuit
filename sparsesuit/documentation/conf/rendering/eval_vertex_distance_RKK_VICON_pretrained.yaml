@@ -1,21 +1,28 @@
 defaults:
   - default
 
-name: eval_vertex_distance_RKK_VICON_sidestepping
+name: eval_vertex_distance_RKK_VICON_pretrained
 dataset:
   source: RKK_VICON
   sensor_config: SSP
   fps: 100
 models:
-  - 2111090811-SSP_19_finetuned-fraction3
-  - 2111091101-SSP_13_finetuned-fraction3
-  - 2111090819-SSP_07_finetuned-fraction3
+  - 2111081611-SSP_19_real
+  - 2111090705-SSP_13_real
+  - 2111081645-SSP_07_real
 
 assets:
 # [asset_idx, frame_idx]
-  - [1, 500]
-  - [4, 500]
-  - [7, 300]
+  - [1, 500]  # gait
+  - [7, 300]  # gait
+  - [13, 300]  # run
+  - [19, 300]  # run
+  - [23, 300]  # sidestep
+  - [24, 300]  # sidestep
+  - [32, 400] # sway
+  - [38, 500]  # sway
+  - [42, 300]  # jump
+  - [46, 300]  # jump
 
 body_transparency: 0.0
 show_from_behind: False

@@ -1,23 +1,34 @@
 defaults:
   - default
 
-name: eval_gt_overlay
-source: AMASS_SSP_nn
+name: eval_gt_overlay_AMASS
+dataset:
+  source: AMASS
+  sensor_config: SSP
+  fps: 100
+  synthesis:
+    acc_noise: 0
+    gyro_noise: 0
+    acc_delta: 4
+
 models:
-  - 2108251857-minimal_outer
-  - 2109291940-11_a
-  - 2109292135-13_a
-  - 2108251334-15_sym_in
-  - 2109292240-SSP_baseline
+  - 2111081611-SSP_19_syn
+  - 2111091140-SSP_17_syn
+  - 2111090705-SSP_13_syn
+  - 2111091141-SSP_11_syn
+  - 2111081645-SSP_07_syn
+
 assets:
 # [asset_idx, frame_idx]
-  - [1, 200]  # throwing
-  - [5, 100]  # side steps
-  - [7, 1080]  # bending arms
-  - [8, 100]  # sitting
-  - [15, 500]  # dancing
-  - [20, 100]  # simple walking
-  - [27, 2920]  # walking and rotating arms
+  - [0, 200]  # side steps
+  - [1, 200]  # bending arms
+  - [2, 200]  # throwing
+  - [3, 200]  # sitting
+  - [4, 200]  # dancing
+  - [5, 200]  # simple walking
+  - [6, 200]  # simple walking
+  - [7, 200]  # walking and rotating arms
+
 body_transparency: 0.0
 show_from_behind: False
 use_default_pose: False
@@ -26,8 +37,8 @@ sensor_config: SSP
 show_vertex_distance: False
 show_gt: True
 render_frames: 5
-render_every_n_frame: 20
-show_rendering: True
+render_every_n_frame: 33
+show_rendering: False
 orthographic_camera: True
 camera_translation: [0, 0.5, 1.75]
 render_width: 800

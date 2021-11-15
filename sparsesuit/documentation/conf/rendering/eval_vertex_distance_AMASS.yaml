@@ -1,28 +1,33 @@
 defaults:
   - default
 
-name: eval_vertex_distance_RKK_VICON_pretrained
+name: eval_vertex_distance_AMASS
 dataset:
-  source: RKK_VICON
+  source: AMASS
   sensor_config: SSP
   fps: 100
+  synthesis:
+    acc_noise: 0
+    gyro_noise: 0
+    acc_delta: 4
+
 models:
-  - 2111081611-SSP_19_real
-  - 2111090705-SSP_13_real
-  - 2111081645-SSP_07_real
+  - 2111081611-SSP_19_syn
+  - 2111091140-SSP_17_syn
+  - 2111090705-SSP_13_syn
+  - 2111091141-SSP_11_syn
+  - 2111081645-SSP_07_syn
 
 assets:
 # [asset_idx, frame_idx]
-  - [1, 500]  # gait
-  - [7, 300]  # gait
-  - [13, 300]  # run
-  - [19, 300]  # run
-  - [23, 300]  # sidestep
-  - [24, 300]  # sidestep
-  - [32, 400] # sway
-  - [38, 500]  # sway
-  - [42, 300]  # jump
-  - [46, 300]  # jump
+  - [0, 200]  # side steps
+  - [1, 200]  # bending arms
+  - [2, 200]  # throwing
+  - [3, 200]  # sitting
+  - [4, 200]  # dancing
+  - [5, 200]  # simple walking
+  - [6, 200]  # simple walking
+  - [7, 200]  # walking and rotating arms
 
 body_transparency: 0.0
 show_from_behind: False
@@ -31,12 +36,12 @@ show_sensors: True
 show_vertex_distance: True
 show_gt: False
 render_frames: 5
-render_every_n_frame: 20
+render_every_n_frame: 50
 show_rendering: False
 orthographic_camera: True
 camera_translation: [0, 0.5, 1.75]
 render_width: 800
-make_gif: True
-gif_fps: 15
+make_gif: False
+gif_fps: 25
 
 

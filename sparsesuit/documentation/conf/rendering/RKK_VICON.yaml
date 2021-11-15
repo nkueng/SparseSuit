@@ -1,12 +1,44 @@
 defaults:
   - default
 
-name: dip_imu
-source: DIP_IMU_17
-sensor_config: MVN
-# 0: leg raise
-# 6: jumping jacks
-asset_idx: 1
+name: RKK_VICON
+dataset:
+  source: RKK_VICON
+  sensor_config: SSP
+  fps: 100
+
+sensors:
+  - left_back
+  - right_back
+  - left_collar
+  - right_collar
+  - head
+  - left_shoulder
+  - right_shoulder
+  - left_elbow
+  - right_elbow
+  - left_wrist
+  - right_wrist
+  - left_hip
+  - right_hip
+  - left_knee
+  - right_knee
+  - left_ankle
+  - right_ankle
+
+#asset_idx: 1
+assets:
+  # [asset_idx, frame_idx]
+  - [ 1, 500 ]  # gait
+  - [ 7, 300 ]  # gait
+  - [ 13, 300 ]  # run
+  - [ 19, 300 ]  # run
+  - [ 23, 300 ]  # sidestep
+  - [ 24, 300 ]  # sidestep
+  - [ 32, 400 ] # sway
+  - [ 38, 500 ]  # sway
+  - [ 43, 100 ]  # jump
+  - [ 47, 100 ]  # jump
 render_width: 600
 body_transparency: 0.1
 show_sensor_orientations: True

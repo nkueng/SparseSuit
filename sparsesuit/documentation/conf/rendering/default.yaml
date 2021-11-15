@@ -31,6 +31,7 @@ sensors: all
 show_unused_sensors: False
 sensor_config: SSP
 real_data: False
+source: None
 
 #dataset:
 #  source: AMASS

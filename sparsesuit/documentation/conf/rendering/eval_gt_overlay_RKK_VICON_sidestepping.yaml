@@ -1,21 +1,21 @@
 defaults:
   - default
 
-name: eval_gt_overlay_RKK_VICON_walking
+name: eval_gt_overlay_RKK_VICON_sidestepping
 description: evaluation of models trained on real data on a real dataset
 dataset:
   source: RKK_VICON
   sensor_config: SSP
   fps: 100
 models:
-  - 2111090811-SSP_19_finetuned-fraction1
-  - 2111091101-SSP_13_finetuned-fraction1
-  - 2111090819-SSP_07_finetuned-fraction1
+  - 2111090811-SSP_19_finetuned-fraction3
+  - 2111091101-SSP_13_finetuned-fraction3
+  - 2111090819-SSP_07_finetuned-fraction3
 
 assets:
 # [asset_idx, frame_idx]
-  - [1, 500]  # gait
-  - [4, 500]  # gait
+  - [1, 200]  # gait
+  - [4, 200]  # gait
   - [7, 300]  # gait
 
 body_transparency: 0.0

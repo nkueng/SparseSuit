@@ -15,6 +15,7 @@ body_transparency: 0
 render_every_n_frame: 10
 show_sensors: False
 show_rendering: False
+make_gif: False
 orthographic_camera: True
 camera_translation: [0, 0.5, 1.75]
 

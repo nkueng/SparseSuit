@@ -1,15 +1,16 @@
 defaults:
   - default
 
-name: eval_gt_overlay_RKK_VICON
-description: evaluation of models trained on real data on a real dataset
+name: eval_gt_overlay_RKK_VICON_pretrained
+description: evaluation of models trained on synthetic data on a real dataset
 dataset:
   source: RKK_VICON
   sensor_config: SSP
   fps: 100
 models:
-  - 2111021102-SSP_baseline_finetuned
-  - 2111031407-minimal_inner_no_noise_finetuned
+  - 2111081611-SSP_19_real
+  - 2111090705-SSP_13_real
+  - 2111081645-SSP_07_real
 
 assets:
 # [asset_idx, frame_idx]
