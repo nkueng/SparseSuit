@@ -108,17 +108,12 @@ class Trainer:
         # tensorboard setup
         time_stamp = datetime.datetime.now().strftime("%y%m%d%H%M")
 
-        # create folder name from time, experiment, and hyperparameter changes
-        self.experiment_name = "-".join(
-            [
-                time_stamp,
-                self.exp_name,
-                # train_config.config + str(num_train_sens),
-            ]
-        )
-
         for k, v in hyperparams_diff.items():
-            self.experiment_name += "-" + k + str(v)
+            self.exp_name += "-" + k + str(v)
+        cfg.experiment.name = self.exp_name
+
+        # create folder name from time, experiment, and hyperparameter changes
+        self.experiment_name = "-".join([time_stamp, self.exp_name])
 
         if "rkk_fraction" in ds_config:
             if ds_config.rkk_fraction != 0:

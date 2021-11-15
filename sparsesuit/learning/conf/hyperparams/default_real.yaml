@@ -8,5 +8,6 @@ train_on_processed: False
 use_stats: True
 num_workers: 4
 pin_memory: True
+traintime_noise: False
 
 evaluate_every_step: 50

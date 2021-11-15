@@ -8,7 +8,6 @@ finetune_dataset:
 debug: False
 gpu: True
 train_on_processed: False
-traintime_noise: False
 
 defaults:
   - hyperparams: default_finetune
