@@ -1,0 +1,24 @@
+name: MVN_10
+
+sensors:
+  sensor_config: MVN
+  sensor_count: 10
+  names:
+  - head
+  - left_wrist
+  - right_wrist
+  - left_shoulder
+  - right_shoulder
+  - left_hip
+  - right_hip
+  - left_ankle
+  - right_ankle
+
+train_dataset:
+  source: AMASS
+  sensor_config: MVN
+  fps: 60
+  synthesis:
+    acc_noise: 0
+    gyro_noise: 0
+    acc_delta: 4
