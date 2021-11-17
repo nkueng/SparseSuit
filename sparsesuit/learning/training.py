@@ -115,6 +115,9 @@ class Trainer:
         # create folder name from time, experiment, and hyperparameter changes
         self.experiment_name = "-".join([time_stamp, self.exp_name])
 
+        if finetune:
+            self.experiment_name = cfg.finetune_experiment + "_finetuned"
+
         if "rkk_fraction" in ds_config:
             if ds_config.rkk_fraction != 0:
                 self.experiment_name += "-fraction" + str(ds_config.rkk_fraction)
@@ -500,7 +503,7 @@ def do_training(cfg: DictConfig):
         utils.get_project_folder(), "learning/conf/evaluation.yaml"
     )
     eval_cfg = OmegaConf.load(eval_cfg_path)
-    # adapt evaluation config to experiment name and evaluate on same data
+    # adapt evaluation config to experiment name and evaluate on training data
     eval_cfg.evaluation.experiment = trainer.experiment_name
     eval_cfg.evaluation.eval_dataset = cfg.experiment.train_dataset
     # keep debugging flag but force without visualization
