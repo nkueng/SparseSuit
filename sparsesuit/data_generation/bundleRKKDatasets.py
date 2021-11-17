@@ -23,6 +23,12 @@ from sparsesuit.utils import smpl_helpers, utils, visualization
 pio.renderers.default = "browser"
 
 
+"""
+This script creates the RKK_VICON and RKK_STUDIO datasets by aligning Vicon/Studio poses 
+with the corresponding sensor measurements.
+"""
+
+
 def extract_pkl_data(file_path):
     if os.path.isfile(file_path):
         with open(file_path, "rb") as fin:
@@ -222,8 +228,11 @@ def split_data(sensor_acc, sensor_ori, vicon_poses, valid_frames):
 
 if __name__ == "__main__":
 
-    PLOT = True
+    PLOT = False
     SAVE_PLOTS = False  # saves plots instead of showing them
+    SPLIT_INVALID = (
+        False  # splits sequences with invalid frames into two and saves separately
+    )
 
     # set src directories
     vicon_src_dir = os.path.join(paths.SOURCE_PATH, "raw_SSP_dataset/Vicon_data/MoSh")
@@ -412,12 +421,18 @@ if __name__ == "__main__":
                 if np.any(~valid_frames):
                     # split assets with invalid frames into several sequences
                     out_dicts = split_data(sensor_acc, sensor_ori, poses, valid_frames)
-                    for i, out_dict in enumerate(out_dicts):
-                        out_name = (
-                            os.path.join(out_folder, file_name) + "_" + str(i) + ".npz"
-                        )
-                        with open(out_name, "wb") as fout:
-                            np.savez_compressed(fout, **out_dict)
+                    out_dict = out_dicts[0]
+                    if SPLIT_INVALID:
+                        for i, out_dict in enumerate(out_dicts):
+                            out_name = (
+                                os.path.join(out_folder, file_name)
+                                + "_"
+                                + str(i)
+                                + ".npz"
+                            )
+                            with open(out_name, "wb") as fout:
+                                np.savez_compressed(fout, **out_dict)
+                        continue
 
                 else:
                     # save whole sequence
@@ -426,19 +441,19 @@ if __name__ == "__main__":
                         "imu_acc": sensor_acc,
                         "gt": poses,
                     }
-                    out_name = os.path.join(out_folder, file_name) + ".npz"
-                    with open(out_name, "wb") as fout:
-                        np.savez_compressed(fout, **out_dict)
+                out_name = os.path.join(out_folder, file_name) + ".npz"
+                with open(out_name, "wb") as fout:
+                    np.savez_compressed(fout, **out_dict)
 
             success_counter += 1
-            if np.any(~valid_frames):
+            if np.any(~valid_frames) and SPLIT_INVALID:
                 success_counter += 1
 
             # plot
             if PLOT:
                 data = {
                     "vicon": vicon_joints,
-                    # "studio": studio_joints,
+                    # "studio": studio_joints[: len(vicon_joints)],
                     # "corr": corr,
                     "studio_aligned": studio_joints_aligned,
                     "valid_frames": valid_frames.astype(int) / 5,
@@ -452,8 +467,8 @@ if __name__ == "__main__":
                         # "studio",
                         # "corr",
                         "studio_aligned",
-                        "valid_frames",
-                        "acc",
+                        # "valid_frames",
+                        # "acc",
                     ],
                     title=correspondence,
                 )
