@@ -96,7 +96,8 @@ if __name__ == "__main__":
     vicon_data, _ = get_data(vicon_path)
     studio_data, studio_filenames = get_data(studio_path)
 
-    error_stats = {}
+    ang_error_stats = {}
+    pos_error_stats = {}
     for vicon_i, studio_i, filename_i in zip(vicon_data, studio_data, studio_filenames):
 
         # visualize(studio_i, vicon_i)
@@ -111,7 +112,9 @@ if __name__ == "__main__":
         vicon_full[:, :9] = [0, 0, 1, 1, 0, 0, 0, 1, 0]
         studio_full[:, :9] = [0, 0, 1, 1, 0, 0, 0, 1, 0]
 
-        # compute angular error for each asset in test sets
+        # compute errors for each asset in test sets
+        pred = studio_full
+        targ = vicon_full
         pred_g = smpl_helpers.smpl_rot_to_global(studio_full)
         targ_g = smpl_helpers.smpl_rot_to_global(vicon_full)
 
@@ -123,11 +126,23 @@ if __name__ == "__main__":
         mean_joint_ang_err = np.mean(angle_err, axis=0)
         rel_angle_err = angle_err[sensors.ANG_EVAL_JOINTS]
         mean_ang_err = np.mean(angle_err)
-        print("{}: {}".format(filename_i, mean_ang_err))
 
-        error_stats[filename_i.split(".npz")[0]] = mean_joint_ang_err
+        pos_err, _, _ = evaluation.joint_pos_error(pred, targ, smpl_model)
+        mean_joint_pos_err = np.mean(pos_err, axis=0)
+        rel_pos_err = pos_err[sensors.POS_EVAL_JOINTS]
+        mean_pos_err = np.mean(pos_err)
 
-    # save error statistics in RKK_STUDIO folder
-    err_stats_path = os.path.join(studio_path.split("/test")[0], "error_stats.npz")
+        print("{}: {} deg and {} cm".format(filename_i, mean_ang_err, mean_pos_err))
+
+        ang_error_stats[filename_i.split(".npz")[0]] = mean_joint_ang_err
+        pos_error_stats[filename_i.split(".npz")[0]] = mean_joint_pos_err
+
+    # save angular error statistics in RKK_STUDIO folder
+    err_stats_path = os.path.join(studio_path.split("/test")[0], "ang_errs.npz")
     with open(err_stats_path, "wb") as fout:
-        np.savez_compressed(fout, **error_stats)
+        np.savez_compressed(fout, **ang_error_stats)
+
+    # save positional error statistics in RKK_STUDIO folder
+    err_stats_path = os.path.join(studio_path.split("/test")[0], "pos_errs.npz")
+    with open(err_stats_path, "wb") as fout:
+        np.savez_compressed(fout, **pos_error_stats)
