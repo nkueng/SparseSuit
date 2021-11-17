@@ -20,7 +20,7 @@ assets:
   - [19, 300]  # run
   - [23, 300]  # sidestep
   - [24, 300]  # sidestep
-  - [32, 400] # sway
+  - [32, 600] # sway
   - [38, 500]  # sway
   - [42, 300]  # jump
   - [46, 300]  # jump

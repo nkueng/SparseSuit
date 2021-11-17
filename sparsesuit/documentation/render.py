@@ -39,21 +39,8 @@ def render_from_config(config: DictConfig):
 
     # load poses from requested dataset
     elif "dataset" in cfg:
-        ds_path = utils.ds_path_from_config(cfg.dataset, "training")
-
-        filelist = []
-        for root, dirs, files in os.walk(os.path.join(ds_path, "test")):
-            for file in files:
-                if file.endswith(".npz"):
-                    filelist.append(os.path.join(root, file))
-
-        filelist = sorted(filelist)
-        poses_padded = []
-        for file in filelist:
-            poses = np.load(file)["pose"]
-            poses_padded.append(smpl_helpers.extract_from_norm_ds(poses))
-
         # load models and their predictions
+        motion_types = set()
         if "models" in cfg:
             predictions = {}
             sens = {}
@@ -65,6 +52,9 @@ def render_from_config(config: DictConfig):
                 with np.load(os.path.join(model_path, pred_file)) as data:
                     data_in = dict(data)
                 predictions[model] = list(data_in.values())
+                motion_type_i = list(data_in.keys())
+                motion_types_i = [m.split("_")[2] for m in motion_type_i]
+                motion_types.update(motion_types_i)
                 # load model config
                 exp_config = utils.load_config(model_path).experiment.sensors
                 sens[model] = exp_config.names
@@ -74,24 +64,49 @@ def render_from_config(config: DictConfig):
                 elif exp_config.sensor_config == "MVN":
                     sens[model].append("pelvis")
 
-            if "VICON" in ds_path:
-                # add RKK_STUDIO poses to evaluation
-                studio_path = ds_path.replace("VICON", "STUDIO")
-                studio_files = []
-                for root, dirs, files in os.walk(os.path.join(studio_path, "test")):
-                    for file in files:
+        # load ground truth
+        ds_path = utils.ds_path_from_config(cfg.dataset, "training")
+        filelist = []
+        for root, dirs, files in os.walk(os.path.join(ds_path, "test")):
+            for file in files:
+                if file.endswith(".npz"):
+                    if "models" in cfg and "RKK" in ds_path:
+                        # only visualize motions that were in the model predictions above
+                        motion_type = file.split("_")[2]
+                        if motion_type in motion_types:
+                            filelist.append(os.path.join(root, file))
+                    else:
+                        filelist.append(os.path.join(root, file))
+
+        filelist = sorted(filelist)
+        poses_padded, acc, ori = [], [], []
+        for file in filelist:
+            data = dict(np.load(file))
+            poses_padded.append(smpl_helpers.extract_from_norm_ds(data["pose"]))
+            if cfg.show_sensor_orientations:
+                acc.append(data["acc"])
+                ori.append(data["ori"])
+
+        # add RKK_STUDIO poses to evaluation
+        if "VICON" in ds_path and "models" in cfg:
+            studio_path = ds_path.replace("VICON", "STUDIO")
+            studio_files = []
+            for root, dirs, files in os.walk(os.path.join(studio_path, "test")):
+                for file in files:
+                    motion_type = file.split("_")[2]
+                    if motion_type in motion_types:
                         if file.endswith(".npz"):
                             studio_files.append(os.path.join(root, file))
 
-                studio_files = sorted(studio_files)
-                studio_poses = []
-                for file in studio_files:
-                    poses = np.load(file)["pose"]
-                    studio_poses.append(np.expand_dims(poses, axis=0))
+            studio_files = sorted(studio_files)
+            studio_poses = []
+            for file in studio_files:
+                poses = np.load(file)["pose"]
+                studio_poses.append(np.expand_dims(poses, axis=0))
 
-                predictions["rkk_studio"] = studio_poses
-                cfg.models.append("rkk_studio")
-                sens["rkk_studio"] = sensors.SENS_NAMES_SSP
+            predictions["rkk_studio"] = studio_poses
+            cfg.models.append("rkk_studio")
+            sens["rkk_studio"] = sensors.SENS_NAMES_SSP
 
     else:
         # load pose data from one of the datasets
@@ -157,7 +172,7 @@ def render_from_config(config: DictConfig):
     if cfg.make_gif:
         # render every frame for smooth gifs
         cfg.render_frames *= cfg.render_every_n_frame
-        cfg.render_every_n_frame = 1
+        cfg.render_every_n_frame = 2
 
     if "dataset" in cfg:
         if "models" in cfg:
@@ -198,16 +213,52 @@ def render_from_config(config: DictConfig):
                 render_poses(poses_padded_i, smpl_model, cfg_i)
 
         else:
-            for i, poses_padded_i in enumerate(poses_padded):
-                cfg_i = cfg.copy()
-                folder_name = filelist[i].split("test/")[1].split(".npz")[0]
-                folder_name = cfg.name + "/" + str(i) + "_" + folder_name
-                cfg_i.name = folder_name
-                cfg_i.frame_range = list(
-                    range(0, len(poses_padded_i), cfg.render_every_n_frame)
-                )
-                poses_padded_i = poses_padded_i[cfg_i.frame_range]
-                render_poses(poses_padded_i, smpl_model, cfg_i)
+            if "assets" in cfg:
+                # render only requested assets
+                for asset_idx, frame_idx in cfg.assets:
+                    cfg_i = cfg.copy()
+                    last_frame = (
+                        frame_idx + cfg.render_every_n_frame * cfg.render_frames
+                    )
+                    cfg_i.frame_range = list(
+                        range(frame_idx, last_frame, cfg.render_every_n_frame)
+                    )
+                    poses_padded_i = poses_padded[asset_idx][
+                        frame_idx : last_frame : cfg.render_every_n_frame
+                    ]
+                    cfg_i.name = cfg.name + "/" + str(asset_idx)
+                    if cfg.show_sensor_orientations:
+                        seq_len = len(cfg_i.frame_range)
+                        acc_i = acc[asset_idx][
+                            frame_idx : last_frame : cfg.render_every_n_frame
+                        ].reshape([seq_len, -1, 3])
+                        ori_i = ori[asset_idx][
+                            frame_idx : last_frame : cfg.render_every_n_frame
+                        ].reshape([seq_len, -1, 3, 3])
+                        render_poses(
+                            poses_padded_i, smpl_model, cfg_i, acc=acc_i, ori=ori_i
+                        )
+                    else:
+                        render_poses(poses_padded_i, smpl_model, cfg_i)
+            else:
+                # render everything
+                for i, poses_padded_i in enumerate(poses_padded):
+                    cfg_i = cfg.copy()
+                    folder_name = filelist[i].split("test/")[1].split(".npz")[0]
+                    folder_name = cfg.name + "/" + str(i) + "_" + folder_name
+                    cfg_i.name = folder_name
+                    cfg_i.frame_range = list(
+                        range(0, len(poses_padded_i), cfg.render_every_n_frame)
+                    )
+                    poses_padded_i = poses_padded_i[cfg_i.frame_range]
+                    if cfg.show_sensor_orientations:
+                        acc_i = acc[cfg_i.frame_range]
+                        ori_i = ori[cfg_i.frame_range]
+                        render_poses(
+                            poses_padded_i, smpl_model, cfg_i, acc=acc_i, ori=ori_i
+                        )
+                    else:
+                        render_poses(poses_padded_i, smpl_model, cfg_i)
 
     elif cfg.source == "DIP_IMU_17":
         # make sure real acc and ori signal are rendered
@@ -383,7 +434,8 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None, acc=None, ori=Non
                 tf = np.eye(4)
                 tf[:3, :3] = rel_tfs_i[ori_ind, :3, :3]
                 if ori is not None:
-                    ori_ind = list(sensor_vertices.keys()).index(sensor)
+                    # ori_ind = list(sensor_vertices.keys()).index(sensor)
+                    ori_ind = chosen_sensors.index(sensor)
                     if cfg.name == "dip_imu_6_nn":
                         ori_ind = cfg.sensors.index(sensor)
                     tf[:3, :3] = ori[idx_i, ori_ind]

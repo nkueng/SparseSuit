@@ -8,7 +8,9 @@ dataset:
   fps: 100
 models:
   - 2111081611-SSP_19_real
+  - 2111091140-SSP_17_real
   - 2111090705-SSP_13_real
+  - 2111091141-SSP_11_real
   - 2111081645-SSP_07_real
 
 assets:

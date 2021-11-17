@@ -1,9 +1,9 @@
 defaults:
   - default
 
-name: all_test_sequences_RKK_VICON
+name: all_test_sequences_RKK_STUDIO
 dataset:
-  source: RKK_VICON
+  source: RKK_STUDIO
   sensor_config: SSP
   fps: 100
 real_data: True
