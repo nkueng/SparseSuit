@@ -16,7 +16,7 @@ def get_data(path):
     for file in files:
         with np.load(os.path.join(path, file)) as file_data:
             data.append(dict(file_data)["pose"])
-    return data
+    return data, files
 
 
 def visualize(pred, targ):
@@ -93,10 +93,11 @@ if __name__ == "__main__":
     vicon_path = os.path.join(paths.DATASET_PATH, "RKK_VICON/SSP_fps100_n/test")
     studio_path = os.path.join(paths.DATASET_PATH, "RKK_STUDIO/SSP_fps100_n/test")
 
-    vicon_data = get_data(vicon_path)
-    studio_data = get_data(studio_path)
+    vicon_data, _ = get_data(vicon_path)
+    studio_data, studio_filenames = get_data(studio_path)
 
-    for vicon_i, studio_i in zip(vicon_data, studio_data):
+    error_stats = {}
+    for vicon_i, studio_i, filename_i in zip(vicon_data, studio_data, studio_filenames):
 
         # visualize(studio_i, vicon_i)
 
@@ -122,4 +123,11 @@ if __name__ == "__main__":
         mean_joint_ang_err = np.mean(angle_err, axis=0)
         rel_angle_err = angle_err[sensors.ANG_EVAL_JOINTS]
         mean_ang_err = np.mean(angle_err)
-        print(mean_ang_err)
+        print("{}: {}".format(filename_i, mean_ang_err))
+
+        error_stats[filename_i.split(".npz")[0]] = mean_joint_ang_err
+
+    # save error statistics in RKK_STUDIO folder
+    err_stats_path = os.path.join(studio_path.split("/test")[0], "error_stats.npz")
+    with open(err_stats_path, "wb") as fout:
+        np.savez_compressed(fout, **error_stats)
