@@ -1,10 +1,12 @@
 import logging
 import os
+import time
 
 import cv2
 import hydra
 import numpy as np
-import procrustes
+from scipy.spatial.transform import Rotation as R
+
 import torch
 import torch.nn.functional as F
 from omegaconf import DictConfig, OmegaConf
@@ -125,6 +127,7 @@ class Evaluator:
         stats_loss = Welford()
         stats_jerk = Welford()
         stats_ang_per_asset = {}
+        stats_pos_per_asset = {}
 
         # container to store predicted poses
         predicted_poses = {}
@@ -134,6 +137,7 @@ class Evaluator:
             for batch_num, (ori, acc, pose_trgt, filename) in enumerate(self.test_dl):
                 # get ang err statistics for this asset
                 stats_ang_err_asset = Welford()
+                stats_pos_err_asset = Welford()
 
                 self.logger.info(
                     "Computing metrics for asset {}: {} with {} frames.".format(
@@ -215,9 +219,14 @@ class Evaluator:
                         stats_pos_err.add(pos_err_i)
                         stats_jerk.add(jerk_i)
                         stats_ang_err_asset.add(ang_err_i)
+                        stats_pos_err_asset.add(pos_err_i)
 
                 # keep track of angular errors per joint and per asset
                 stats_ang_per_asset[filename[0]] = stats_ang_err_asset.mean
+
+                if self.eval_pos_err:
+                    # keep track of positional error per joint and per asset
+                    stats_pos_per_asset[filename[0]] = stats_pos_err_asset.mean
 
                 self.logger.info(
                     "Mean angular error: {}".format(np.mean(stats_ang_err_asset.mean))
@@ -232,9 +241,14 @@ class Evaluator:
             np.savez_compressed(fout, **predicted_poses)
 
         # save per joint and asset ang err stats to local file
-        err_stats_filename = os.path.join(self.exp_path, "error_stats.npz")
+        err_stats_filename = os.path.join(self.exp_path, "ang_errs.npz")
         with open(err_stats_filename, "wb") as fout:
             np.savez_compressed(fout, **stats_ang_per_asset)
+
+        if self.eval_pos_err:
+            pos_err_stats_filename = os.path.join(self.exp_path, "pos_errs.npz")
+            with open(pos_err_stats_filename, "wb") as fout:
+                np.savez_compressed(fout, **stats_pos_per_asset)
 
         # summarize errors
         metrics = {
@@ -394,114 +408,124 @@ class Evaluator:
         angle_err = joint_angle_error(pred_g, targ_g)
 
         # compute positional error for all SMPL joints (optional as computationally heavy)
-        # TODO: get visualization out of joint_pos_error
         if compute_positional_error:
-            pos_err, pred_joint_pos = self.joint_pos_error(pred, targ)
+            pos_err, pred_joint_pos, vis_dict = joint_pos_error(
+                pred, targ, self.smpl_model
+            )
             # compute jerk for all SMPL joints
             jerk_delta = 1
             jerk = utils.compute_jerk(pred_joint_pos, jerk_delta, self.ds_fps)
+
+            if self.visualize:
+                from sparsesuit.utils import visualization
+
+                verts = [vis_dict["targ_verts"], vis_dict["pred_verts_aligned"]]
+                vertex_colors = ["green", "gray"]
+                joints = [vis_dict["targ_joints"], vis_dict["pred_joints_aligned"]]
+
+                # show vertex indices of sensors used in training
+                root_ids = [0, 1] if self.sensor_config == "SSP" else [0]
+                train_sens_ids = root_ids + [
+                    ind + len(root_ids) for ind in self.sens_ind
+                ]
+                if self.sensor_config == "SSP":
+                    sens_verts = list(sensors.SENS_VERTS_SSP.values())
+                else:
+                    sens_verts = list(sensors.SENS_VERTS_MVN.values())
+                train_sens_verts = [sens_verts[idx] for idx in train_sens_ids]
+                sensors_vis = [
+                    vis_dict["pred_verts_aligned"][:, train_sens_verts],
+                ]
+
+                visualization.vis_smpl(
+                    faces=self.smpl_model.faces,
+                    vertices=verts,
+                    vertex_colors=vertex_colors,
+                    # joints=joints,
+                    sensors=sensors_vis,
+                    play_frames=500,
+                    playback_speed=0.3,
+                    add_captions=True,
+                    side_by_side=False,
+                    fps=self.ds_fps,
+                )
         else:
             pos_err = np.zeros(angle_err.shape)
             jerk = np.zeros(angle_err.shape)
 
         return angle_err, pos_err, jerk
 
-    def joint_pos_error(self, predicted_pose_params, target_pose_params):
-        """compute 3d joint positions for prediction and target, then evaluate euclidean distance"""
-        batch_size = predicted_pose_params.shape[0]
 
-        pose_dim = 9  # 9 if rotation matrices, 3 if angle axis
-        assert (
-            predicted_pose_params.shape[1] // sensors.NUM_SMPL_JOINTS == pose_dim
-        ), "Dimension mismatch. Abort!"
+def joint_pos_error(predicted_pose_params, target_pose_params, smpl_model):
+    """compute 3d joint positions for prediction and target, then evaluate euclidean distance"""
+    batch_size = predicted_pose_params.shape[0]
 
-        # add rotation matrices (identity) for missing SMPL-X joints
-        padding_len = sensors.NUM_SMPLX_JOINTS - sensors.NUM_SMPL_JOINTS
-        padding = np.tile(np.identity(3), [batch_size, padding_len, 1, 1])
-        padding_flat = np.reshape(padding, [batch_size, -1])
-        pred_poses_padded = np.concatenate(
-            (predicted_pose_params[:, : 24 * pose_dim], padding_flat), axis=1
-        )
-        pred_poses = np.reshape(pred_poses_padded, [batch_size, -1, 3, 3])
-        targ_poses_padded = np.concatenate(
-            (target_pose_params[:, : 24 * pose_dim], padding_flat), axis=1
-        )
-        targ_poses = np.reshape(targ_poses_padded, [batch_size, -1, 3, 3])
+    pose_dim = 9  # 9 if rotation matrices, 3 if angle axis
+    assert (
+        predicted_pose_params.shape[1] // sensors.NUM_SMPL_JOINTS == pose_dim
+    ), "Dimension mismatch. Abort!"
 
-        # make predictions proper rotation matrices (removing scale information)
-        pred_poses_proper = utils.remove_scaling(pred_poses)
+    # add rotation matrices (identity) for missing SMPL-X joints
+    padding_len = sensors.NUM_SMPLX_JOINTS - sensors.NUM_SMPL_JOINTS
+    padding = np.tile(np.identity(3), [batch_size, padding_len, 1, 1])
+    padding_flat = np.reshape(padding, [batch_size, -1])
+    pred_poses_padded = np.concatenate(
+        (predicted_pose_params[:, : 24 * pose_dim], padding_flat), axis=1
+    )
+    pred_poses = np.reshape(pred_poses_padded, [batch_size, -1, 3, 3])
+    targ_poses_padded = np.concatenate(
+        (target_pose_params[:, : 24 * pose_dim], padding_flat), axis=1
+    )
+    targ_poses = np.reshape(targ_poses_padded, [batch_size, -1, 3, 3])
 
-        pred_poses_torch = torch.from_numpy(pred_poses_proper).float()
-        pred_verts, pred_joints, _ = smpl_helpers.my_lbs(
-            self.smpl_model, pred_poses_torch, pose2rot=False
-        )
-        pred_verts_np, pred_joints_np = (
-            utils.copy2cpu(pred_verts),
-            utils.copy2cpu(pred_joints),
-        )
+    # make predictions proper rotation matrices (removing scale information)
+    pred_poses_proper = utils.remove_scaling(pred_poses)
 
-        targ_poses_torch = torch.from_numpy(targ_poses).float()
-        targ_verts, targ_joints, _ = smpl_helpers.my_lbs(
-            self.smpl_model, targ_poses_torch, pose2rot=False
-        )
-        targ_verts_np, targ_joints_np = (
-            utils.copy2cpu(targ_verts),
-            utils.copy2cpu(targ_joints),
-        )
+    pred_poses_torch = torch.from_numpy(pred_poses_proper).float()
+    pred_verts, pred_joints, _ = smpl_helpers.my_lbs(
+        smpl_model, pred_poses_torch, pose2rot=False
+    )
+    pred_verts_np, pred_joints_np = (
+        utils.copy2cpu(pred_verts),
+        utils.copy2cpu(pred_joints),
+    )
 
-        # select SMPL joints (first 24) from SMPL-X joints
-        pred_joints_sel = pred_joints_np[:, : sensors.NUM_SMPL_JOINTS]
-        targ_joints_sel = targ_joints_np[:, : sensors.NUM_SMPL_JOINTS]
+    targ_poses_torch = torch.from_numpy(targ_poses).float()
+    targ_verts, targ_joints, _ = smpl_helpers.my_lbs(
+        smpl_model, targ_poses_torch, pose2rot=False
+    )
+    targ_verts_np, targ_joints_np = (
+        utils.copy2cpu(targ_verts),
+        utils.copy2cpu(targ_joints),
+    )
 
-        # rotationally align joints via Procrustes
-        pred_verts_aligned = []
-        pred_joints_aligned = []
-        for i in range(batch_size):
-            rot_i = procrustes.rotational(pred_joints_sel[i], targ_joints_sel[i]).get(
-                "t"
-            )
-            pred_joints_aligned_i = pred_joints_sel[i] @ rot_i
-            pred_joints_aligned.append(pred_joints_aligned_i)
+    # select SMPL joints (first 24) from SMPL-X joints
+    pred_joints_sel = pred_joints_np[:, : sensors.NUM_SMPL_JOINTS]
+    targ_joints_sel = targ_joints_np[:, : sensors.NUM_SMPL_JOINTS]
 
-            # align vertices of predicted SMPL mesh for visualization purposes
-            pred_verts_aligned.append(pred_verts_np[i] @ rot_i)
+    # rotationally align joints via Procrustes/Kabsch
+    pred_verts_aligned = []
+    pred_joints_aligned = []
+    for i in range(batch_size):
+        rot_i, _ = R.align_vectors(pred_joints_sel[i], targ_joints_sel[i])
+        rot_i = rot_i.as_matrix()
+        pred_joints_aligned_i = pred_joints_sel[i] @ rot_i
+        pred_joints_aligned.append(pred_joints_aligned_i)
 
-        # compute euclidean distances between prediction and target joints
-        mm = np.linalg.norm(np.asarray(pred_joints_aligned) - targ_joints_sel, axis=2)
+        # align vertices of predicted SMPL mesh for visualization purposes
+        pred_verts_aligned.append(pred_verts_np[i] @ rot_i)
 
-        if self.visualize:
-            from sparsesuit.utils import visualization
+    # compute euclidean distances between prediction and target joints
+    mm = np.linalg.norm(np.asarray(pred_joints_aligned) - targ_joints_sel, axis=2)
 
-            verts = [targ_verts_np, np.asarray(pred_verts_aligned)]
-            vertex_colors = ["green", "gray"]
-            joints = [targ_joints_np, np.asarray(pred_joints_aligned)]
+    vis_dict = {
+        "targ_verts": targ_verts_np,
+        "pred_verts_aligned": np.asarray(pred_verts_aligned),
+        "targ_joints": targ_joints_np,
+        "pred_joints_aligned": np.asarray(pred_joints_aligned),
+    }
 
-            # show vertex indices of sensors used in training
-            root_ids = [0, 1] if self.sensor_config == "SSP" else [0]
-            train_sens_ids = root_ids + [ind + len(root_ids) for ind in self.sens_ind]
-            if self.sensor_config == "SSP":
-                sens_verts = list(sensors.SENS_VERTS_SSP.values())
-            else:
-                sens_verts = list(sensors.SENS_VERTS_MVN.values())
-            train_sens_verts = [sens_verts[idx] for idx in train_sens_ids]
-            sensors_vis = [
-                np.asarray(pred_verts_aligned)[:, train_sens_verts],
-            ]
-
-            visualization.vis_smpl(
-                faces=self.smpl_model.faces,
-                vertices=verts,
-                vertex_colors=vertex_colors,
-                # joints=joints,
-                sensors=sensors_vis,
-                play_frames=500,
-                playback_speed=0.3,
-                add_captions=True,
-                side_by_side=False,
-                fps=self.ds_fps,
-            )
-
-        return mm * 100, pred_joints_sel  # convert m to cm
+    return mm * 100, pred_joints_sel, vis_dict  # convert m to cm
 
 
 def joint_angle_error(predicted_pose_params, target_pose_params):
