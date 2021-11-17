@@ -1,8 +1,9 @@
 """
 Converts directories of raw IMU sensor data (SREC) to model-frame accelerations and joint
-orientations ready for normalization. The script estimates the facing direction of the subject in the world and the
-offsets from joints and sensors during the initial straight pose. The resulting sensor data is dumped in an NPZ
-file.
+orientations ready for normalization.
+The script estimates the facing direction of the subject in the world and the
+offsets from joints and sensors during the initial straight pose.
+The resulting sensor data is dumped in an NPZ file.
 """
 import os
 import numpy as np
@@ -71,7 +72,7 @@ def parse_srec(rec):
             acc_global.append(acc_glob_i)
         acc_global = np.stack(acc_global).squeeze()
 
-        # estimate world facing direction for calibration in first frame from sensors on back
+        # estimate model facing direction in world for calibration in first frame from sensors on back
         if len(rot_world_to_model) == 0:
             left_oris = []
             right_oris = []
@@ -81,20 +82,33 @@ def parse_srec(rec):
                     left_oris.append(sensor_ori)
                 if "right" in sensor_name:
                     right_oris.append(sensor_ori)
-            z_axis = np.array([0, 0, 1])
             # forward is the positive z-axis of all the sensors on the back
             forward_world = []
             forward_debug = []
+            z_axis = np.array([0, 0, 1])
+            # right is the positive x-axis of all the sensors on the back
+            right_world = []
+            right_debug = []
+            x_axis = np.array([1, 0, 0])
             for l_ori_i, r_ori_i in zip(left_oris, right_oris):
                 forward_i = l_ori_i @ z_axis + r_ori_i @ z_axis
                 forward_world.append(forward_i)
                 forward_debug.append(forward_i)
                 forward_debug.append(forward_i)
+                right_i = l_ori_i @ x_axis + r_ori_i @ x_axis
+                right_world.append(right_i)
+                right_debug.append(right_i)
+                right_debug.append(right_i)
             forward_world = np.mean(forward_world[:3], axis=0)
+            right_world = np.mean(right_world[:3], axis=0)
             # rot_world_to_model = utils.rot_from_vecs(forward_world, np.array([1, 0, 0]))
-            rot_world_to_model, _ = R.align_vectors(
-                np.array([[1, 0, 0]]), np.expand_dims(forward_world, 0)
-            )
+            # find the rotation that aligns the model frame with the world frame
+            # the model frame is given by the model-relative forward and right direction
+            # the world frame is given by the world-relative forward (x) and right direction (-y)
+            world_frame = np.array([x_axis, [0, -1, 0]])
+            model_frame = np.array([forward_world, right_world])
+            rot_world_to_model, _ = R.align_vectors(world_frame, model_frame)
+            # rot_world_to_model_vec = rot_world_to_model.as_rotvec()
             rot_world_to_model = rot_world_to_model.as_matrix()
             # rot_world_to_model = np.eye(3)
 
@@ -117,13 +131,21 @@ def parse_srec(rec):
         # convert sensor orientations to joint orientations with calibration offset
         ori_norm = np.einsum("ijk,ikl->ijl", ori_model, ori_offsets)
 
-        # debugging visualizations
+        # DEBUG visualizations
+        # visualize orientations in global frame
         # ori_norm = ori_xyz_mat
+        # visualize orientations in model frame
         # ori_norm = ori_model
+        # visualize forward direction instead of accelerations
         # acc_model = np.stack(forward_debug)
-        # acc_model = np.insert(acc_model, 6, np.ones([1, 3]), 0)
         # forward = np.mean(acc_model[:6:2], axis=0)
+        # acc_model = np.insert(acc_model, 6, np.ones([1, 3]), 0)
         # acc_model[6] = forward
+        # visualize right direction instead of accelerations
+        # acc_model = np.stack(right_debug)
+        # right = np.mean(acc_model[:6:2], axis=0)
+        # acc_model = np.insert(acc_model, 6, np.ones([1, 3]), 0)
+        # acc_model[6] = right
 
         oris.append(ori_norm)
         accs.append(acc_model)
@@ -159,9 +181,11 @@ def vis_oris_accs(oris, accs, pose=None):
     from sparsesuit.utils import visualization, smpl_helpers, utils
 
     # select desired range of frames
-    play_frames = 500
-    initial_frame = 100
-    play_range = range(initial_frame, initial_frame + play_frames)
+    play_frames = 300
+    initial_frame = 200
+    play_range = range(
+        initial_frame, min(initial_frame + play_frames, len(pose), len(oris))
+    )
     oris = oris[play_range]
     accs = accs[play_range]
     pose = pose[play_range]
@@ -189,7 +213,7 @@ def vis_oris_accs(oris, accs, pose=None):
         faces=smpl_model.faces,
         vertices=[verts],
         play_frames=play_frames,
-        playback_speed=0.3,
+        playback_speed=0.2,
         sensors=[verts[:, list(SENS_VERTS_SSP.values())]],
         oris=[oris],
         accs=[accs],
@@ -201,7 +225,7 @@ def vis_oris_accs(oris, accs, pose=None):
 if __name__ == "__main__":
     VISUALIZE = False
     SKIP_EXISTING = False
-    PLOT = True
+    PLOT = False
 
     # set src directory with files
     src_dir = os.path.join(paths.SOURCE_PATH, "raw_SSP_dataset/SSP_data")
@@ -214,6 +238,9 @@ if __name__ == "__main__":
                 srec_files.append(os.path.join(root, file))
 
     srec_files = sorted(srec_files)
+
+    # DEBUG
+    # srec_files = srec_files[41:]
 
     # parse SREC and extract IMU data in correct frame
     for srec_file in srec_files:
