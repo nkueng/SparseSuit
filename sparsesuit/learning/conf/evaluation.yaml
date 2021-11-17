@@ -1,8 +1,8 @@
 evaluation:
-  experiment: 2111021102-SSP_baseline_finetuned
+  experiment: 2111031417-minimal_outer
   past_frames: 20
   future_frames: 5
-  pos_err: False
+  pos_err: True
   eval_dataset:
     source: RKK_VICON
     fps: 100

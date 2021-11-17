@@ -503,9 +503,10 @@ def do_training(cfg: DictConfig):
         utils.get_project_folder(), "learning/conf/evaluation.yaml"
     )
     eval_cfg = OmegaConf.load(eval_cfg_path)
-    # adapt evaluation config to experiment name and evaluate on training data
+    # adapt evaluation config to experiment name
     eval_cfg.evaluation.experiment = trainer.experiment_name
-    eval_cfg.evaluation.eval_dataset = cfg.experiment.train_dataset
+    # evaluate on same data as trained on
+    # eval_cfg.evaluation.eval_dataset = cfg.experiment.train_dataset
     # keep debugging flag but force without visualization
     eval_cfg.debug = cfg.debug
     eval_cfg.visualize = False
