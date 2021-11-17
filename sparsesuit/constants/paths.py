@@ -59,12 +59,12 @@ DIP_IMU_MAPPING = {
 
 # one entire subject for test, one of each motion for validation
 RKK_STUDIO_MAPPING = {
-    "05": "test",
-    "01/3_Sidestep_take-7": "validation",
+    "01": "test",
+    "05/3_Sidestep_take-7": "validation",
     "02/1_Gait_take-3": "validation",
     "03/5_Jump_take-9": "validation",
     "04/2_Run_take-1": "validation",
-    "01/4_Sway_take-2": "validation",
+    "02/4_Sway_take-2": "validation",
 }
 RKK_VICON_MAPPING = RKK_STUDIO_MAPPING
 # test dataset contains all gait motions: enable code in normalization.py
@@ -105,6 +105,7 @@ AMASS_MAPPING = {
     "MPI_HDM05/bk_HDM_bk_03-04_03_120": "test",
     "Eyes_Japan_Dataset/hamada_accident-11-falldown-hamada": "test",
     "SSM_synced/20160330_03333_chicken_wings_poses": "test",
+    "ACCAD/Female1General_c3d_A2-Sway": "test",
 }
 
 AMASS_MAPPING_OVERFIT = {"ACCAD": "test"}
