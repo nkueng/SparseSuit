@@ -1,11 +1,12 @@
 defaults:
   - default
 
-name: leg_raise_oris_accs
+name: leg_raise_only_oris_accs
 render_width: 600
 body_transparency: 0.5
 show_sensor_orientations: True
 show_accelerations: True
+show_body: False
 acc_delta: 1
 sensors:
   - right_knee
@@ -17,5 +18,5 @@ render_every_n_frame: 1
 show_rendering: False
 orthographic_camera: True
 camera_translation: [0, 0.5, 1.75]
-make_gif: False
+make_gif: True
 gif_fps: 30

@@ -6,8 +6,15 @@ show_joints: True
 show_skeleton: True
 show_rendering: True
 show_sensor_orientations: True
+use_straight_pose: True
+use_default_pose: False
 body_transparency: 0.5
+show_sensors: True
 sensors:
-  - right_wrist
-  - right_elbow
+#  - right_wrist
+#  - right_elbow
   - right_shoulder
+
+show_world_axes: True
+show_model_axes: True
+show_joint_axes: True

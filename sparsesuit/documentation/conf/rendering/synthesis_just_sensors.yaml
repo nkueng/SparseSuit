@@ -8,3 +8,11 @@ show_accelerations: True
 
 show_rendering: False
 make_gif: True
+
+sensors:
+  - head
+  - left_wrist
+  - right_wrist
+  - left_pelvis
+  - left_ankle
+  - right_ankle

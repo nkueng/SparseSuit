@@ -10,6 +10,7 @@ use_default_pose: False
 show_from_behind: True
 #show_sensor_orientations: True
 body_transparency: 0.7
+transparent_background: False
 camera_translation: [0, -.1, 1.5]
 camera_angle: 0.0
 show_unused_sensors: True

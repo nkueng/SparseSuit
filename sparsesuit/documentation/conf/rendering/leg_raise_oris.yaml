@@ -1,19 +1,7 @@
 defaults:
-  - default
+  - leg_raise
 
 name: leg_raise_oris
-render_width: 600
-body_transparency: 0.0
+body_transparency: 0.5
 show_sensor_orientations: True
-sensors:
-  - right_knee
-  - left_knee
-  - right_elbow
-  - left_elbow
-  - head
-render_every_n_frame: 1
-show_rendering: False
-orthographic_camera: True
-camera_translation: [0, 0.5, 1.75]
-make_gif: False
-gif_fps: 30
+make_gif: True

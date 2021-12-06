@@ -6,13 +6,24 @@ dataset:
   source: RKK_VICON
   sensor_config: SSP
   fps: 100
+
+assets:
+# [asset_idx, frame_idx]
+  - [7, 250]  # gait
+  - [14, 225]  # run
+  - [24, 250]  # sidestep
+  - [32, 600] # sway
+  - [42, 330]  # jump
+
+
 real_data: True
 render_width: 800
 body_transparency: 0
-render_frames: 1000
-render_every_n_frame: 10
+render_frames: 5
+render_every_n_frame: 20
 show_sensors: False
 show_rendering: False
 orthographic_camera: True
-camera_translation: [0, 0.5, 1.75]
+camera_translation: [0, 0.4, 1.75]
+make_gif: True
 

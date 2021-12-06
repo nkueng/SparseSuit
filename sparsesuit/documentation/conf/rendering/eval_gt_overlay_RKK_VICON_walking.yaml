@@ -8,9 +8,11 @@ dataset:
   sensor_config: SSP
   fps: 100
 models:
-  - 2111090811-SSP_19_finetuned-fraction1
-  - 2111091101-SSP_13_finetuned-fraction1
-  - 2111090819-SSP_07_finetuned-fraction1
+  - 2111171748-SSP_07_finetuned-fraction1
+  - 2111171748-SSP_11_finetuned-fraction1
+  - 2111171748-SSP_13_finetuned-fraction1
+  - 2111171748-SSP_17_finetuned-fraction1
+  - 2111171748-SSP_19_finetuned-fraction1
 
 assets:
 # [asset_idx, frame_idx]
@@ -30,7 +32,7 @@ render_frames: 5
 render_every_n_frame: 20
 show_rendering: False
 orthographic_camera: True
-camera_translation: [0, 0.5, 1.75]
+camera_translation: [0, 0.4, 1.75]
 render_width: 800
 make_gif: True
 gif_fps: 15

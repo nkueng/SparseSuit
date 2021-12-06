@@ -10,7 +10,7 @@ frame_idx: -1
 show_rendering: True
 make_gif: False
 render_frames: 1
-gif_fps: 15
+gif_fps: 20
 show_from_behind: False
 show_sideways: False
 show_body: True
@@ -32,6 +32,11 @@ show_unused_sensors: False
 sensor_config: SSP
 real_data: False
 source: None
+render_every_n_frame_gif: 2
+transparent_background: True
+show_world_axes: False
+show_model_axes: False
+show_joint_axes: False
 
 #dataset:
 #  source: AMASS

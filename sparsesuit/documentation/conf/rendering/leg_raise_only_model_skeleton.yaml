@@ -1,9 +1,11 @@
 defaults:
   - leg_raise
 
-name: leg_raise_only_model
-body_transparency: 0.0
+name: leg_raise_only_model_skeleton
+body_transparency: 0.3
 show_sensor_orientations: False
 show_sensors: False
+show_skeleton: True
+show_joints: True
 
 make_gif: True

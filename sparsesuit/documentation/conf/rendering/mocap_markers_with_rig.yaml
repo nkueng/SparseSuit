@@ -1,12 +1,14 @@
 defaults:
   - default
 
-name: mocap_markers
+name: mocap_markers_with_rig
 frame_idx: 4050
 source: AMASS
 show_body: False
 show_sensors: False
 show_markers: True
-show_rendering: True
+show_rendering: False
 camera_translation: [0, 0.0, 1.5]
 camera_angle: 0.0
+show_joints: True
+show_skeleton: True

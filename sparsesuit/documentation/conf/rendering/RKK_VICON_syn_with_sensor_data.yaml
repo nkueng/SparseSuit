@@ -1,8 +1,8 @@
 defaults:
-  - dip_imu
+  - default
 
-name: RKK_VICON_real_with_sensor_data
-source: RKK_VICON/SSP_fps100_n/test
+name: RKK_VICON_syn_with_sensor_data
+source: RKK_VICON/SSP_fps100_accn0_gyron0_accd4_n/test
 sensor_config: SSP
 sensors:
 #  - left_pelvis
@@ -24,14 +24,26 @@ sensors:
   - right_knee
   - left_ankle
   - right_ankle
-asset_idx: 24
-frame_idx: 300
-render_frames: 5
-render_every_n_frame: 20
+
+assets:
+  - [7, 250]  # gait
+  - [14, 225]  # run
+  - [24, 250]  # sidestep
+  - [32, 600] # sway
+  - [42, 330]  # jump
+
+#asset_idx: 24
+frame_idx: -1
+
+render_frames: 20
+render_every_n_frame: 5
+render_every_n_frame_gif: 1
 show_sideways: False
 show_rendering: False
 orthographic_camera: True
-camera_translation: [0, 0.5, 1.75]
+camera_translation: [0, 0.4, 1.75]
+show_sensor_orientations: True
+render_width: 800
 show_body: True
 make_gif: True
-gif_fps: 15
+gif_fps: 10

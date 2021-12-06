@@ -1,21 +1,21 @@
 defaults:
   - default
 
-name: eval_vertex_distance_RKK_VICON_walking
+name: eval_vertex_distance_RKK_VICON_swaying
 dataset:
   source: RKK_VICON
   sensor_config: SSP
   fps: 100
 models:
-  - 2111171748-SSP_07_finetuned-fraction1
-  - 2111171748-SSP_11_finetuned-fraction1
-  - 2111171748-SSP_13_finetuned-fraction1
-  - 2111171748-SSP_17_finetuned-fraction1
-  - 2111171748-SSP_19_finetuned-fraction1
+  - 2111171748-SSP_07_finetuned-fraction4
+  - 2111171748-SSP_11_finetuned-fraction4
+  - 2111171748-SSP_13_finetuned-fraction4
+  - 2111171748-SSP_17_finetuned-fraction4
+  - 2111171748-SSP_19_finetuned-fraction4
 
 assets:
 # [asset_idx, frame_idx]
-  - [7, 250]
+  - [3, 600]
 
 body_transparency: 0.0
 show_from_behind: False

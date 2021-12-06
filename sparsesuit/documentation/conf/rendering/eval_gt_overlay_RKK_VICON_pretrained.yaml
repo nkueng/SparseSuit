@@ -8,9 +8,11 @@ dataset:
   sensor_config: SSP
   fps: 100
 models:
-  - 2111081611-SSP_19_real
-  - 2111090705-SSP_13_real
-  - 2111081645-SSP_07_real
+  - 2111171748-SSP_07_real
+  - 2111171748-SSP_11_real
+  - 2111171748-SSP_13_real
+  - 2111171748-SSP_17_real
+  - 2111171748-SSP_19_real
 
 assets:
 # [asset_idx, frame_idx]
@@ -23,7 +25,7 @@ assets:
   - [32, 600] # sway
   - [38, 500]  # sway
   - [42, 300]  # jump
-  - [46, 300]  # jump
+  - [46, 200]  # jump
 body_transparency: 0.0
 show_from_behind: False
 use_default_pose: False

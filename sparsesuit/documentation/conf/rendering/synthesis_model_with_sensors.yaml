@@ -1,14 +1,14 @@
 defaults:
   - default
 
-name: synthesis_with_skeleton
+name: synthesis_model_with_sensors
 source: AMASS
 asset_idx: 6
 render_width: 600
-body_transparency: 0.3
+body_transparency: 0
 #show_sensor_orientations: True
 #show_accelerations: True
-show_sensors: False
+show_sensors: True
 use_default_pose: False
 show_sideways: True
 render_every_n_frame: 1
@@ -20,5 +20,5 @@ make_gif: True
 frame_idx: 100
 render_frames: 100
 
-show_joints: True
-show_skeleton: True
+show_joints: False
+show_skeleton: False

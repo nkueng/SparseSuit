@@ -12,22 +12,22 @@ dataset:
     acc_delta: 4
 
 models:
-  - 2111081611-SSP_19_syn
-  - 2111091140-SSP_17_syn
-  - 2111090705-SSP_13_syn
-  - 2111091141-SSP_11_syn
-  - 2111081645-SSP_07_syn
+  - 2111171748-SSP_07_syn
+#  - 2111171748-SSP_11_syn
+#  - 2111171748-SSP_13_syn
+#  - 2111171748-SSP_17_syn
+  - 2111171748-SSP_19_syn
 
 assets:
 # [asset_idx, frame_idx]
-  - [0, 200]  # side steps
-  - [1, 200]  # bending arms
-  - [2, 200]  # throwing
-  - [3, 200]  # sitting
-  - [4, 200]  # dancing
-  - [5, 200]  # simple walking
-  - [6, 200]  # simple walking
-  - [7, 200]  # walking and rotating arms
+#  - [0, 200]  # side steps
+  - [1, 400]  # bending arms
+#  - [2, 200]  # throwing
+#  - [3, 200]  # sitting
+#  - [4, 200]  # dancing
+#  - [5, 200]  # simple walking
+#  - [6, 200]  # simple walking
+#  - [7, 200]  # walking and rotating arms
 
 body_transparency: 0.0
 show_from_behind: False
@@ -39,9 +39,12 @@ render_frames: 5
 render_every_n_frame: 50
 show_rendering: False
 orthographic_camera: True
-camera_translation: [0, 0.5, 1.75]
+camera_translation: [0, 0.4, 1.75]
 render_width: 800
-make_gif: False
+make_gif: True
 gif_fps: 25
+
+eval_rkk_studio: False
+
 
 

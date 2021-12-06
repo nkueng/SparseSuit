@@ -1,7 +1,7 @@
 defaults:
   - default
 
-name: leg_raise_sensors
+name: leg_raise
 render_width: 600
 body_transparency: 0.0
 show_sensor_orientations: False

@@ -1,7 +1,7 @@
 defaults:
   - default
 
-name: eval_vertex_distance_AMASS
+name: eval_vertex_distance_AMASS_no_ACCAD
 dataset:
   source: AMASS
   sensor_config: SSP
@@ -12,11 +12,9 @@ dataset:
     acc_delta: 4
 
 models:
-  - 2111171748-SSP_07_syn
-  - 2111171748-SSP_11_syn
-  - 2111171748-SSP_13_syn
-  - 2111171748-SSP_17_syn
-  - 2111171748-SSP_19_syn
+  - 2111202113-SSP_07_ACCAD
+  - 2111202115-SSP_13_ACCAD
+  - 2111202118-SSP_19_ACCAD
 
 assets:
 # [asset_idx, frame_idx]
@@ -24,10 +22,6 @@ assets:
   - [1, 200]  # bending arms
   - [2, 200]  # throwing
   - [3, 200]  # sitting
-  - [4, 200]  # dancing
-  - [5, 200]  # simple walking
-  - [6, 200]  # simple walking
-  - [7, 200]  # walking and rotating arms
 
 body_transparency: 0.0
 show_from_behind: False
@@ -39,9 +33,9 @@ render_frames: 5
 render_every_n_frame: 50
 show_rendering: False
 orthographic_camera: True
-camera_translation: [0, 0.5, 1.75]
+camera_translation: [0, 0.4, 1.75]
 render_width: 800
-make_gif: False
+make_gif: True
 gif_fps: 25
 
-
+eval_rkk_studio: False

@@ -12,11 +12,11 @@ dataset:
     acc_delta: 4
 
 models:
-  - 2111081611-SSP_19_syn
-  - 2111091140-SSP_17_syn
-  - 2111090705-SSP_13_syn
-  - 2111091141-SSP_11_syn
-  - 2111081645-SSP_07_syn
+  - 2111171748-SSP_07_syn
+  - 2111171748-SSP_11_syn
+  - 2111171748-SSP_13_syn
+  - 2111171748-SSP_17_syn
+  - 2111171748-SSP_19_syn
 
 assets:
 # [asset_idx, frame_idx]
@@ -40,7 +40,7 @@ render_frames: 5
 render_every_n_frame: 33
 show_rendering: False
 orthographic_camera: True
-camera_translation: [0, 0.5, 1.75]
+camera_translation: [0, 0.4, 1.75]
 render_width: 800
 make_gif: False
 gif_fps: 15
