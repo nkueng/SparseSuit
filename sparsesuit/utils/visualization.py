@@ -94,7 +94,7 @@ def vis_smpl(
                     )
                 else:
                     sens = creation.uv_sphere(radius=0.015)
-                sens.visual.vertex_colors = colors["orange"]
+                # sens.visual.vertex_colors = colors["orange"]
                 tfs = np.tile(np.eye(4), (sensor.shape[1], 1, 1))
                 if oris is not None:
                     tfs[:, :3, :3] = oris[s][i]
@@ -177,6 +177,9 @@ def vis_smpl(
         old_nodes = nodes_buffer[i]
 
         time.sleep(1 / fps)
+
+        if i == 0:
+            pass
 
     if play_frames == 1:
         input("hit enter")

@@ -33,9 +33,9 @@ def render_from_config(config: DictConfig):
         poses_padded = smpl_helpers.generate_relaxed_pose()
         cfg.frame_range = [0]
 
-    elif cfg.name == "leg_raise":
+    elif "leg_raise" in cfg.name:
         poses_padded = create_leg_raise_sequence()
-        cfg.frame_range = [0]
+        cfg.frame_range = list(range(0, len(poses_padded)))
 
     # load poses from requested dataset
     elif "dataset" in cfg:
@@ -88,7 +88,7 @@ def render_from_config(config: DictConfig):
                 ori.append(data["ori"])
 
         # add RKK_STUDIO poses to evaluation
-        if "VICON" in ds_path and "models" in cfg:
+        if cfg.eval_rkk_studio:
             studio_path = ds_path.replace("VICON", "STUDIO")
             studio_files = []
             for root, dirs, files in os.walk(os.path.join(studio_path, "test")):
@@ -141,6 +141,26 @@ def render_from_config(config: DictConfig):
                 data_in["gt"], list(sensors.SMPL_JOINT_IDS.values())
             )
 
+        elif "RKK_VICON" in cfg.source:
+            # load real motion assets in SSP configuration
+            src_dir = os.path.join(
+                "/media/nic/ExtremeSSD/thesis_data/training_data", cfg.source
+            )
+            filelist = []
+            for root, dirs, files in os.walk(src_dir):
+                for file in files:
+                    if file.endswith(".npz"):
+                        filelist.append(os.path.join(root, file))
+            filelist = sorted(filelist)
+
+            poses_padded, acc, ori = [], [], []
+            for asset_idx, _ in cfg.assets:
+                data_in = np.load(filelist[asset_idx])
+                # extract poses from motion asset
+                poses_padded.append(smpl_helpers.extract_from_norm_ds(data_in["pose"]))
+                acc.append(data_in["acc"])
+                ori.append(data_in["ori"])
+
         elif cfg.source == "DIP_IMU_6_NN":
             # load real motion assets in DIP configuration
             src_dir = os.path.join(paths.DIP_6_NN_PATH, "imu_own_training.npz")
@@ -161,18 +181,29 @@ def render_from_config(config: DictConfig):
 
         elif cfg.use_default_pose:
             poses_padded = torch.zeros([1, sensors.NUM_SMPLX_JOINTS * 3])
+            cfg.frame_range = [0]
+
+        elif cfg.use_straight_pose:
+            poses_padded = smpl_helpers.generate_straight_pose()
+            cfg.frame_range = [0]
+
         else:
             raise NameError("Desired source of motion asset is unclear")
 
         if cfg.frame_idx != -1:
             assert cfg.frame_idx <= len(poses_padded), "invalid frame index, aborting!"
             last_frame = cfg.frame_idx + cfg.render_frames
-            poses_padded = poses_padded[cfg.frame_idx : last_frame]
+            # poses_padded = poses_padded[cfg.frame_idx : last_frame]
 
     if cfg.make_gif:
-        # render every frame for smooth gifs
+        # render every other frame for smooth gifs
         cfg.render_frames *= cfg.render_every_n_frame
-        cfg.render_every_n_frame = 2
+        cfg.render_every_n_frame = cfg.render_every_n_frame_gif
+
+    if cfg.frame_idx != -1:
+        cfg.frame_range = list(
+            range(cfg.frame_idx, last_frame, cfg.render_every_n_frame)
+        )
 
     if "dataset" in cfg:
         if "models" in cfg:
@@ -266,9 +297,28 @@ def render_from_config(config: DictConfig):
             range(cfg.frame_idx, last_frame, cfg.render_every_n_frame)
         )
 
+        poses_padded = poses_padded[cfg.frame_range]
         acc = data_in["imu_acc"][cfg.frame_range]
         ori = data_in["imu_ori"][cfg.frame_range]
         render_poses(poses_padded, smpl_model, cfg, acc=acc, ori=ori)
+
+    elif "RKK_VICON" in cfg.source:
+        # make sure real acc and ori signal are rendered
+        for i, (asset_idx, frame_idx) in enumerate(cfg.assets):
+            cfg_i = cfg.copy()
+            cfg_i.name = os.path.join(cfg.name, str(asset_idx))
+            last_frame = frame_idx + cfg.render_every_n_frame * cfg.render_frames
+            cfg_i.frame_range = list(
+                range(frame_idx, last_frame, cfg.render_every_n_frame)
+            )
+            poses_padded_i = poses_padded[i][cfg_i.frame_range]
+            cfg_i.name = cfg.name + "/" + str(asset_idx)
+
+            acc_i = acc[i][cfg_i.frame_range].reshape([len(cfg_i.frame_range), 17, 3])
+            ori_i = ori[i][cfg_i.frame_range].reshape(
+                [len(cfg_i.frame_range), 17, 3, 3]
+            )
+            render_poses(poses_padded_i, smpl_model, cfg_i, acc=acc_i, ori=ori_i)
 
     elif cfg.source == "DIP_IMU_6_NN":
         # make sure real acc and ori signal are rendered
@@ -285,6 +335,7 @@ def render_from_config(config: DictConfig):
         )
         render_poses(poses_padded, smpl_model, cfg, acc=acc, ori=ori)
     else:
+        poses_padded = poses_padded[cfg.frame_range]
         render_poses(poses_padded, smpl_model, cfg)
 
 
@@ -298,6 +349,7 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None, acc=None, ori=Non
         camera_translation=cfg.camera_translation,
         camera_angle=cfg.camera_angle,
         orthographic=cfg.orthographic_camera,
+        bg_transparent=cfg.transparent_background,
     )
 
     # rotate poses to show from behind
@@ -442,14 +494,28 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None, acc=None, ori=Non
                 # tf[:3, :3] = sensor_orientation.transpose()
                 tf[:3, 3] = vertices_i[vert_ind]
 
+                if cfg.show_joint_axes:
+                    # plot orientation of joint
+                    tf_joint = tf.copy()
+                    tf_joint[:3, 3] = joints_i[ori_ind]
+                    ax = creation.axis(
+                        transform=tf_joint,
+                        origin_size=0.015,
+                        origin_color=[0, 0, 0],
+                        axis_radius=0.005,
+                        axis_length=0.05,
+                    )
+                    meshes.append(ax)
+                    tf[:3, :3] = np.matmul(tf[:3, :3], utils.rot_mat(15, "z"))
+
                 if cfg.show_sensor_orientations:
-                    if cfg.name == "leg_raise" and sensor == "right_knee":
+                    if "leg_raise" in cfg.name:  # and sensor == "right_knee":
                         ax = creation.axis(
                             transform=tf,
-                            origin_size=0.021,
+                            origin_size=0.014,
                             origin_color=[0, 0, 0],
-                            axis_radius=0.015,
-                            axis_length=0.15,
+                            axis_radius=0.01,
+                            axis_length=0.1,
                         )
                     else:
                         ax = creation.axis(
@@ -461,6 +527,7 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None, acc=None, ori=Non
                         )
 
                     meshes.append(ax)
+
                 else:
                     box = creation.box(
                         # extents=[0.05, 0.01, 0.03],
@@ -489,20 +556,58 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None, acc=None, ori=Non
                 accs = acc[idx_i]
             if cfg.sensor_config == "SSP":
                 vert_ids = list(sensors.SENS_VERTS_SSP.values())
+                sensor_names = list(sensors.SENS_VERTS_SSP.keys())
             else:
                 vert_ids = list(sensors.SENS_VERTS_MVN.values())
+                sensor_names = list(sensors.SENS_VERTS_MVN.keys())
             if cfg.name == "dip_imu_6_nn":
                 vert_ids = [sensors.SENS_VERTS_MVN[sensor] for sensor in cfg.sensors]
+                sensor_names = [sensor for sensor in cfg.sensors]
 
             for i, acc_i in enumerate(accs):
                 if np.any(np.isnan(acc_i)):
                     continue
-                cyl_orig = vertices_i[vert_ids[i]]
+                sensor_name = chosen_sensors[i]
+                idx = sensor_names.index(sensor_name)
+                cyl_orig = vertices_i[vert_ids[idx]]
                 cyl_end = cyl_orig + acc_i / 50
                 segment = np.array([cyl_orig, cyl_end])
                 cyl = creation.cylinder(radius=0.005, segment=segment)
+                if "leg_raise" in cfg.name:
+                    cyl_end = cyl_orig + acc_i / 30
+                    segment = np.array([cyl_orig, cyl_end])
+                    cyl = creation.cylinder(radius=0.01, segment=segment)
                 cyl.visual.vertex_colors = vis_tools.colors["orange"]
                 meshes.append(cyl)
+
+        # meshes for world and model axes
+        if cfg.show_world_axes:
+            world_tf = np.zeros([4, 4])
+            world_tf[:3, :3] = utils.rot_mat(-73, "y")
+            # world_tf[:3, 3] = [-0.2, -0.8, -1]
+            world_tf[:3, 3] = [0, -0.9, 0]
+            ax = creation.axis(
+                transform=world_tf,
+                origin_size=0.035,
+                origin_color=[0, 0, 0],
+                axis_radius=0.025,
+                axis_length=0.25,
+            )
+
+            meshes.append(ax)
+
+        if cfg.show_model_axes:
+            model_tf = np.zeros([4, 4])
+            model_tf[:3, :3] = utils.rot_mat(0, "y")
+            ax = creation.axis(
+                transform=model_tf,
+                origin_size=0.021,
+                origin_color=[0, 0, 0],
+                axis_radius=0.015,
+                axis_length=0.15,
+            )
+
+            meshes.append(ax)
 
         # render meshes
         if cfg.show_rendering:
@@ -514,7 +619,7 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None, acc=None, ori=Non
             input("press enter to continue")
         else:
             # save file
-            body_image = mv.render(render_wireframe=False)
+            body_image = mv.render(render_wireframe=False, RGBA=True)
 
             if cfg.make_gif:
                 # store frames for gif
@@ -532,7 +637,9 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None, acc=None, ori=Non
                 )
                 print(filename)
                 im_arr = np.expand_dims(body_image, axis=(0, 1, 2))
-                vis_tools.imagearray2file(im_arr, filename)
+                vis_tools.imagearray2file(
+                    im_arr, filename, bg_transparent=cfg.transparent_background
+                )
 
     if cfg.make_gif:
         filename = os.path.join(paths.DOC_PATH, "gifs", cfg.name + ".gif")
@@ -540,6 +647,10 @@ def render_poses(poses_padded, smpl_model, cfg, poses_gt=None, acc=None, ori=Non
         im_arr = np.stack(images)
         im_arr = np.expand_dims(im_arr, axis=(0, 1))
         vis_tools.imagearray2file(im_arr, filename, fps=cfg.gif_fps)
+
+
+def gaussian(x, mean=0.0, std_sqr=1.0):
+    return np.exp(-np.square(x - mean) / (2 * std_sqr)) / (np.sqrt(2 * np.pi * std_sqr))
 
 
 def create_leg_raise_sequence():
@@ -551,18 +662,27 @@ def create_leg_raise_sequence():
     def_pose[joint_ind["right_elbow"] * 3 + 2] = np.pi / 9
     def_pose[joint_ind["left_elbow"] * 3 + 2] = -np.pi / 9
 
-    num_frames = 60
-    poses = torch.zeros([2 * num_frames, sensors.NUM_SMPLX_JOINTS * 3])
+    num_frames = 120
+    poses = torch.zeros([num_frames, sensors.NUM_SMPLX_JOINTS * 3])
+    make_noisy = True
     for i in range(num_frames):
-        rand_i = i + 2 * (random.random() - 0.5)
-        def_pose[joint_ind["right_hip"] * 3] = -rand_i / num_frames * np.pi / 2
-        def_pose[joint_ind["right_knee"] * 3] = rand_i / num_frames * np.pi / 2
+
+        rand_i = i
+        # if make_noisy:
+        #     rand_i = i + 2 * (random.random() - 0.5)
+        iter = 2 * rand_i / num_frames
+        iter_gauss = gaussian(iter * 5, mean=5, std_sqr=2.07) / gaussian(
+            5, mean=5, std_sqr=2.07
+        )
+        def_pose[joint_ind["right_hip"] * 3] = -iter_gauss * np.pi / 2
+        def_pose[joint_ind["right_knee"] * 3] = iter_gauss * np.pi / 2
         # add noise to make look more realistic
-        def_pose[3 : sensors.NUM_SMPL_JOINTS] += (
-            2 * torch.rand(sensors.NUM_SMPL_JOINTS - 3) - 1
-        ) / 400
+        if make_noisy:
+            def_pose[3 : sensors.NUM_SMPL_JOINTS] += (
+                2 * torch.rand(sensors.NUM_SMPL_JOINTS - 3) - 1
+            ) / 50000
         poses[i] = def_pose
-        poses[2 * num_frames - 1 - i] = def_pose
+        # poses[2 * num_frames - 1 - i] = def_pose
     return poses
 
 
