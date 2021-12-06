@@ -1,4 +1,4 @@
-name: 17_back_lower
+name: 17_back_lower_one_sensor
 
 sensors:
   sensor_config: SSP
