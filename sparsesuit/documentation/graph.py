@@ -79,6 +79,7 @@ def create_3d_bar_plot(values, title, error_type, folder_name):
 def create_2d_bar_plot(values, title, error_type, folder_name):
     # sort by configuration name
     x_labels = list(reversed(sorted(list(values.keys()))))
+    plot_x_labels = [label.replace("0", "") for label in x_labels]
     x_data = np.arange(0, len(x_labels))
 
     plot_values = [values[config] for config in x_labels]
@@ -86,34 +87,126 @@ def create_2d_bar_plot(values, title, error_type, folder_name):
     y_data = np.array([val[0] for val in plot_values])
     y_std = np.array([val[1] for val in plot_values])
 
-    color_values = (y_data - PLOT_COLOR_MIN) / np.float_(
-        PLOT_COLOR_MAX - PLOT_COLOR_MIN
-    )
-    # colors = cc.cm.isoluminant_cgo_70_c39(values)
-    colors = cm.rainbow(color_values)
-
     plt.figure(figsize=(8, 8), dpi=100)
     plt.title(title)
-    plt.bar(x_data, y_data, yerr=y_std, capsize=5, color=colors)
-    plt.xlabel("Sensor Configuration")
-    # x_labels = [int(label) for label in x_labels]
-    plt.xticks(x_data, x_labels)
+
     if error_type == "Angular":
         plt.ylabel("Angular Error [$\degree$]")
         y_lim = Y_LIM_ANG
+        plot_color_min = PLOT_COLOR_MIN_ANG
+        plot_color_max = PLOT_COLOR_MAX_ANG
     else:
         plt.ylabel("Positional Error [$cm$]")
         y_lim = Y_LIM_POS
+        plot_color_min = PLOT_COLOR_MIN_POS
+        plot_color_max = PLOT_COLOR_MAX_POS
+
+    # color relative to value
+    # color_values = (y_data - plot_color_min) / np.float_(
+    #     plot_color_max - plot_color_min
+    # )
+    # color_values = (y_data - y_data.min()) / np.float_(y_data.max() - y_data.min())
+    # colors = cc.cm.isoluminant_cgo_70_c39(values)
+    # colors = cm.rainbow(color_values)
+
+    # color relative to category
+    color_begin = 0.3
+    color_end = 0.8
+    color_delta = color_end - color_begin
+
+    color_x_data = x_data.copy()
+    if len(color_x_data) == 5:
+        color_x_data = np.append(color_x_data, 5)
+    color_values = color_delta * color_x_data / max(color_x_data) + color_begin
+    colors = cm.Blues(list(reversed(color_values)))
+
+    plt.bar(x_data, y_data, yerr=y_std, capsize=5, color=colors)
+    plt.xlabel("Sensor Configuration")
+    # x_labels = [int(label) for label in x_labels]
+    plt.xticks(x_data, plot_x_labels)
 
     plt.ylim(top=y_lim)
     plt.gca().yaxis.grid(True)
     # plt.subplots_adjust(left=0.1, right=0.9, bottom=0.1, top=0.9)
-    plt.gca().set_aspect(aspect=0.1 / 6 * len(x_labels))
+    plt.gca().set_aspect(aspect=0.1 * (len(x_labels) / 6) * (Y_LIM_ANG / y_lim))
     folder_path = os.path.join(paths.DOC_PATH, "figures", folder_name)
     Path(folder_path).mkdir(parents=True, exist_ok=True)
     fig_path = os.path.join(folder_path, "_".join([title, "bar.png"]))
     plt.savefig(fig_path, bbox_inches="tight")
     plt.show()
+    return
+
+
+def create_grouped_2d_bar_plot(values, title, error_type, folder_name):
+    # sort configs
+    if "SSP" in values.keys():
+        plot_values = {"SSP": values["SSP"]}
+        for sensor_config, vals in values.items():
+            if sensor_config == "SSP":
+                continue
+            plot_values[sensor_config] = vals
+    else:
+        configs_ordered = list(reversed(sorted(values.keys())))
+        plot_values = {}
+        for config in configs_ordered:
+            plot_values[config] = values[config]
+
+    labels = ["Walk", "Run", "Sidestep", "Sway", "Jump"]
+    x = np.arange(len(labels))  # the label locations
+    num_configs = len(plot_values)
+    width = 1.0 / (num_configs + 2)  # the width of the bars
+    x_offsets = np.arange(num_configs) / (num_configs - 1) - 0.5
+    x_offsets *= 0.75
+
+    fig, ax = plt.subplots(figsize=(9, 4))
+
+    color_begin = 0.3
+    color_end = 0.8
+    color_delta = color_end - color_begin
+    color_values = (
+        color_delta * np.arange(num_configs) / (num_configs - 1) + color_begin
+    )
+    colors = cm.Blues(list(reversed(color_values)))
+
+    for i, (sensor_config, motion_errs) in enumerate(plot_values.items()):
+        means = [motion_errs[motion_type][0] for motion_type in labels]
+        stds = [motion_errs[motion_type][1] for motion_type in labels]
+        config_label = sensor_config
+        if str.isdigit(config_label):
+            config_label += " Sensors"
+        config_label = config_label.replace("0", "  ")
+        ax.bar(
+            x + x_offsets[i],
+            means,
+            width,
+            yerr=stds,
+            label=config_label,
+            color=colors[i],
+            capsize=2,
+        )
+
+    # Add some text for labels, title and custom x-axis tick labels, etc.
+    if error_type == "Angular":
+        ax.set_ylabel("Angular Error [$\degree$]")
+    else:
+        ax.set_ylabel("Positional Error [$cm$]")
+
+    ax.set_title(title)
+    ax.set_xticks(x)  # sets locations of xticks
+    ax.set_xticklabels(labels)  # sets displayed text for xticks
+    ax.yaxis.grid()
+    ax.legend()
+    # ax.set_aspect(0.2)
+
+    # save
+    folder_path = os.path.join(paths.DOC_PATH, "figures", folder_name)
+    Path(folder_path).mkdir(parents=True, exist_ok=True)
+    fig_path = os.path.join(folder_path, "_".join([title, "grouped_bar.png"]))
+    plt.savefig(fig_path, bbox_inches="tight")
+
+    fig.tight_layout()
+    plt.show()
+    return
 
 
 def create_2d_box_plot(values, title, error_type, folder_name):
@@ -153,19 +246,48 @@ def create_2d_box_plot(values, title, error_type, folder_name):
 
 def get_studio_data(error_stats):
     # collect error statistics for studio poses
-    studio_err_path = os.path.join(
-        paths.DATASET_PATH, "RKK_STUDIO/SSP_fps100_n/error_stats.npz"
-    )
-    studio_data = dict(np.load(studio_err_path))
-    studio_err_stats = collections.defaultdict(dict)
-    for i in range(1, 6):
-        motion_i_data = []
-        for asset_name, errs in studio_data.items():
-            if i == int(asset_name.split("_")[2]):
-                motion_i_data.append(errs[sensors.ANG_EVAL_JOINTS])
-        studio_err_stats[fraction2motion[str(i)]] = np.array(motion_i_data)
+    studio_err_path = os.path.join(paths.DATASET_PATH, "RKK_STUDIO/SSP_fps100_n")
+    files = os.listdir(studio_err_path)
+    err_files = [file for file in files if "errs" in file]
+    for err_file in err_files:
+        err_type = err_file.replace("s.npz", "")
+        studio_data = dict(np.load(os.path.join(studio_err_path, err_file)))
+        studio_err_stats = collections.defaultdict(dict)
+        for i in range(1, 6):
+            motion_i_data = []
+            for asset_name, errs in studio_data.items():
+                if i == int(asset_name.split("_")[2]):
+                    motion_i_data.append(errs[sensors.ANG_EVAL_JOINTS])
+            studio_err_stats[fraction2motion[str(i)]] = np.array(motion_i_data)
 
-    error_stats["ang_err"]["Studio"] = studio_err_stats
+        error_stats[err_type]["SSP"] = studio_err_stats
+
+    return error_stats
+
+
+def get_data_finetuned_frac_on_real():
+    # collect error statistics for neural networks that were finetuned on fractions and evaluated on real data
+    error_stats = collections.defaultdict(dict)
+    run_dir = paths.EVAL_PATH
+    ang_err_stats = collections.defaultdict(dict)
+    pos_err_stats = collections.defaultdict(dict)
+    for root, dirs, files in os.walk(run_dir):
+        for file in files:
+            if "fraction" in root and "errs" in file:
+                err_type = file.replace("s.npz", "")
+                sensor_config = root.split("SSP_")[1].split("_fine")[0]
+                motion_type = fraction2motion[root.split("fraction")[1]]
+                data = np.load(os.path.join(root, file))
+                data = np.array(list(dict(data).values()))[:, sensors.ANG_EVAL_JOINTS]
+                if err_type == "pos_err":
+                    pos_err_stats[sensor_config][motion_type] = data
+                else:
+                    ang_err_stats[sensor_config][motion_type] = data
+    error_stats["ang_err"] = ang_err_stats
+    error_stats["pos_err"] = pos_err_stats
+
+    # collect error statistics for studio poses
+    error_stats = get_studio_data(error_stats)
 
     return error_stats
 
@@ -176,12 +298,19 @@ def get_data_finetuned_on_real():
     run_dir = paths.EVAL_PATH
     for root, dirs, files in os.walk(run_dir):
         for file in files:
-            if "fraction" in root and "error_stats" in file:
+            if "finetuned" in root and "fraction" not in root and "errs" in file:
+                err_type = file.replace("s.npz", "")
+                error_i_stats = collections.defaultdict(dict)
                 sensor_config = root.split("SSP_")[1].split("_fine")[0]
-                motion_type = fraction2motion[root.split("fraction")[1]]
                 data = np.load(os.path.join(root, file))
-                data = np.array(list(dict(data).values()))[:, sensors.ANG_EVAL_JOINTS]
-                error_stats[sensor_config][motion_type] = data
+                for i in range(1, 6):
+                    motion_i_data = []
+                    for asset_name, errs in data.items():
+                        if i == int(asset_name.split("_")[2]):
+                            motion_i_data.append(errs[sensors.ANG_EVAL_JOINTS])
+                    # studio_err_stats[fraction2motion[str(i)]] = np.array(motion_i_data)
+                    error_i_stats[fraction2motion[str(i)]] = np.array(motion_i_data)
+                error_stats[err_type][sensor_config] = error_i_stats
 
     # collect error statistics for studio poses
     error_stats = get_studio_data(error_stats)
@@ -261,6 +390,30 @@ def get_data_pretrained_on_syn():
     return error_stats
 
 
+def get_data_pretrained_on_syn_RKK():
+    # collect error statistics for neural networks that were pretrained on AMASS and evaluated on synthetic RKK_VICON
+    error_stats = collections.defaultdict(dict)
+    run_dir = paths.EVAL_PATH
+    motion_types = set(fraction2motion.values())
+    for root, dirs, files in os.walk(run_dir):
+        for file in files:
+            if "SSP" in root and "errs" in file:
+                if "finetuned" in root or "real" in root or "syn" in root:
+                    continue
+                err_type = file.replace("s.npz", "")
+                error_i_stats = collections.defaultdict(dict)
+                data = dict(np.load(os.path.join(root, file)))
+                config_name = root.split("SSP_")[1].split("_")[0]
+                for motion in motion_types:
+                    motion_i_data = []
+                    for asset_name, errs in data.items():
+                        if motion == fraction2motion[asset_name[9]]:
+                            motion_i_data.append(errs[sensors.ANG_EVAL_JOINTS])
+                    error_i_stats[motion] = np.array(motion_i_data)
+                error_stats[err_type][config_name] = error_i_stats
+    return error_stats
+
+
 def create_summary_bar_plot(error_stats, folder_name):
     for error_type, err_values in error_stats.items():
         summary_stats = collections.defaultdict(dict)
@@ -287,6 +440,28 @@ def create_summary_box_plot(error_stats, folder_name):
         title = title.format(err_type2str[error_type])
         create_2d_box_plot(
             summary_stats,
+            title,
+            err_type2str[error_type],
+            folder_name,
+        )
+
+
+def create_config_summary_bar_plot(error_stats, folder_name):
+    config_stats = collections.defaultdict(dict)
+    for error_type, err_values in error_stats.items():
+        error_i_stats = collections.defaultdict(dict)
+        for sensor_config, values in err_values.items():
+            for motion_type, errs in values.items():
+                error_i_stats[sensor_config][motion_type] = (
+                    np.mean(errs),
+                    np.std(errs),
+                )
+        config_stats[error_type] = error_i_stats
+    for error_type, err_values in config_stats.items():
+        title = "Mean {} Joint Errors Over All Motion Types"
+        title = title.format(err_type2str[error_type], infinitive2ing[motion_type])
+        create_grouped_2d_bar_plot(
+            err_values,
             title,
             err_type2str[error_type],
             folder_name,
@@ -349,6 +524,7 @@ if __name__ == "__main__":
         "KIT_348_walking_slow01": "Walk",
         "BioMotionLab_NTroje_rub066_0006_normal_walk2": "Walk",
         "ACCAD_Female1Walking_c3d_B11-walkturnleft(135)": "Walk",
+        "BioMotionLab_NTroje_rub025_0027_jumping1": "Walk",
         "KIT_317_walking_slow07": "Walk",
         "ACCAD_Female1Running_c3d_C5-walktorun": "Run",
         "SFU_0017_0017_RunningOnBench002": "Run",
@@ -361,7 +537,6 @@ if __name__ == "__main__":
         "BioMotionLab_NTroje_rub060_0016_sitting2": "Sit",
         "TCD_handMocap_ExperimentDatabase_typing_2": "Sit",
         "KIT_3_jump_up03": "Jump",
-        "BioMotionLab_NTroje_rub025_0027_jumping1": "Jump",
         "Transitions_mocap_mazen_c3d_jumpingjacks_walk": "Jump",
         "Transitions_mocap_mazen_c3d_jumpingjacks_jumpinplace": "Jump",
         "Eyes_Japan_Dataset_hamada_accident-11-falldown-hamada": "Fall",
@@ -371,10 +546,12 @@ if __name__ == "__main__":
     }
 
     # plotting constants
-    PLOT_COLOR_MAX = 25
-    PLOT_COLOR_MIN = 10
-    Y_LIM_ANG = 37
-    Y_LIM_POS = 25
+    PLOT_COLOR_MAX_ANG = 25
+    PLOT_COLOR_MIN_ANG = 0
+    PLOT_COLOR_MAX_POS = 10
+    PLOT_COLOR_MIN_POS = 0
+    Y_LIM_ANG = 37.5
+    Y_LIM_POS = 15
 
     # load data for plotting
 
@@ -382,23 +559,34 @@ if __name__ == "__main__":
     # error_stats = get_data_pretrained_on_syn()
     # folder_name = "pretrained_on_syn"
 
+    # evaluate the pretrained models on synthetic RKK_VICON
+    error_stats = get_data_pretrained_on_syn_RKK()
+    folder_name = "pretrained_on_syn_RKK_VICON"
+
     # evaluate the pretrained models on real data
-    error_stats = get_data_pretrained_on_real()
-    folder_name = "pretrained_on_real"
+    # error_stats = get_data_pretrained_on_real()
+    # folder_name = "pretrained_on_real"
 
     # evaluate the finetuned models on real data
     # error_stats = get_data_finetuned_on_real()
     # folder_name = "finetuned_on_real"
+
+    # evaluate the fraction-finetuned models on real data
+    error_stats = get_data_finetuned_frac_on_real()
+    folder_name = "finetuned_fraction_on_real"
 
     # evaluate models that were trained on real data on the same data
     # error_stats = get_data_trained_real()
     # folder_name = "trained_real"
 
     # create summary bar plot
-    create_summary_bar_plot(error_stats, folder_name)
+    # create_summary_bar_plot(error_stats, folder_name)
+
+    # create a per-configuration summary bar plot for every motion type
+    create_config_summary_bar_plot(error_stats, folder_name)
 
     # create summary box plot
-    create_summary_box_plot(error_stats, folder_name)
+    # create_summary_box_plot(error_stats, folder_name)
 
     # create motion specific 2d bar plot
     create_motion_bar_plots(error_stats, folder_name)
