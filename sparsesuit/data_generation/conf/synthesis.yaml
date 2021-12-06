@@ -1,5 +1,5 @@
 dataset:
-  source: AMASS
+  source: RKK_VICON
   sensor_config: SSP
   fps: 100
   synthesis:
@@ -7,7 +7,7 @@ dataset:
     gyro_noise: 0
     acc_delta: 4
     acc_saturation: 8
-  smpl_genders: [male, female]
+  smpl_genders: [male, female, neutral]
 
 visualize: False
 debug: False

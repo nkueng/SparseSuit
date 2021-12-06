@@ -112,8 +112,12 @@ class Synthesizer:
             # curr_dir = file.split(asset)[0].split("/")[-2]
 
             filename = file.split("/")[-2:]
-            filename = os.path.join(*filename).replace(" ", "").replace("/", "_")
-            dataset_name = file.split("/")[-3]
+            if "RKK" in self.ds_config.source:
+                dataset_name = filename[0]
+                filename = filename[1]
+            else:
+                filename = os.path.join(*filename).replace(" ", "").replace("/", "_")
+                dataset_name = file.split("/")[-3]
 
             # DEBUG
             # if dataset_name == 'ACCAD':
@@ -179,11 +183,19 @@ class Synthesizer:
             try:
                 fps_ori = data_in["frame_rate"]
             except KeyError:
-                self.logger.info("No framerate specified. Skipping!")
-                return False
+                if "RKK" in self.ds_config.source:
+                    fps_ori = self.fps
+                else:
+                    self.logger.info("No framerate specified. Skipping!")
+                    return False
 
         # early exit for sequences of less than 300 frames
-        if data_in["poses"].shape[0] < 300:
+        pose_key = "poses"
+        if "RKK" in self.ds_config.source:
+            pose_key = "gt"
+            data_in["gender"] = "neutral"
+            data_in["betas"] = np.zeros([1, 10])
+        if data_in[pose_key].shape[0] < 300:
             self.logger.info("Fewer than 300 frames. Skipping!")
             return False
 
@@ -191,10 +203,10 @@ class Synthesizer:
         # In case the original frame rates (eg 40FPS) are different from target rates (60FPS)
         if (fps_ori % self.fps) == 0:
             data_out["gt"] = utils.interpolation_integer(
-                data_in["poses"], fps_ori, self.fps
+                data_in[pose_key], fps_ori, self.fps
             )
         else:
-            data_out["gt"] = utils.interpolation(data_in["poses"], fps_ori, self.fps)
+            data_out["gt"] = utils.interpolation(data_in[pose_key], fps_ori, self.fps)
 
         # skip if asset contains less than 300 frames (after synthesis)
         frames_after = data_out["gt"].shape[0] - 2 * self.acc_delta
@@ -345,15 +357,16 @@ class Synthesizer:
             )
 
             # preparing betas
+            betas_k = None
             if betas is not None:
-                betas = torch.tile(torch.Tensor(betas), [len(poses_k), 1])
+                betas_k = torch.tile(torch.Tensor(betas), [len(poses_k), 1])
 
             # load relevant smpl model onto GPU if desired
             smpl_model = self.smpl_models[gender].to(self.device)
 
             # do lbs for given poses
             vertices_k, joints_k, rel_tfs_k = smpl_helpers.my_lbs(
-                smpl_model, poses_torch, betas
+                smpl_model, poses_torch, betas_k
             )
 
             vertices.append(utils.copy2cpu(vertices_k))
