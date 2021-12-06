@@ -1,0 +1,12 @@
+defaults:
+  - default
+
+name: mocap_markers
+frame_idx: 4050
+source: AMASS
+show_body: False
+show_sensors: False
+show_markers: True
+show_rendering: True
+camera_translation: [0, 0.0, 1.5]
+camera_angle: 0.0

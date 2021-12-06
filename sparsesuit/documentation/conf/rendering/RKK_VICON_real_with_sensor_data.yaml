@@ -1,0 +1,37 @@
+defaults:
+  - dip_imu
+
+name: RKK_VICON_real_with_sensor_data
+source: RKK_VICON/SSP_fps100_n/test
+sensor_config: SSP
+sensors:
+#  - left_pelvis
+#  - right_pelvis
+  - left_back
+  - right_back
+  - left_collar
+  - right_collar
+  - head
+  - left_shoulder
+  - right_shoulder
+  - left_elbow
+  - right_elbow
+  - left_wrist
+  - right_wrist
+  - left_hip
+  - right_hip
+  - left_knee
+  - right_knee
+  - left_ankle
+  - right_ankle
+asset_idx: 24
+frame_idx: 300
+render_frames: 5
+render_every_n_frame: 20
+show_sideways: False
+show_rendering: True
+orthographic_camera: True
+camera_translation: [0, 0.5, 1.75]
+show_body: True
+make_gif: True
+gif_fps: 15

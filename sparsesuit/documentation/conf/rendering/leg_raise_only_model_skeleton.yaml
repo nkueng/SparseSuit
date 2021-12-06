@@ -1,0 +1,9 @@
+defaults:
+  - leg_raise
+
+name: leg_raise_only_model
+body_transparency: 0.0
+show_sensor_orientations: False
+show_sensors: False
+
+make_gif: True

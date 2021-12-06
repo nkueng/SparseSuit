@@ -1,10 +1,10 @@
 defaults:
   - default
 
-name: leg_raise_sensors
+name: leg_raise_oris
 render_width: 600
 body_transparency: 0.0
-show_sensor_orientations: False
+show_sensor_orientations: True
 sensors:
   - right_knee
   - left_knee
@@ -15,5 +15,5 @@ render_every_n_frame: 1
 show_rendering: False
 orthographic_camera: True
 camera_translation: [0, 0.5, 1.75]
-make_gif: True
-gif_fps: 20
+make_gif: False
+gif_fps: 30

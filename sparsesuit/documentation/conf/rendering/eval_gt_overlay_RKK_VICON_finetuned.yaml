@@ -1,0 +1,38 @@
+defaults:
+  - default
+
+name: eval_gt_overlay_RKK_VICON_jumping
+description: evaluation of models trained on real data on a real dataset
+dataset:
+  source: RKK_VICON
+  sensor_config: SSP
+  fps: 100
+models:
+  - 2111090811-SSP_19_finetuned-fraction5
+  - 2111091101-SSP_13_finetuned-fraction5
+  - 2111090819-SSP_07_finetuned-fraction5
+
+assets:
+# [asset_idx, frame_idx]
+  - [1, 200]  # gait
+  - [4, 300]  # gait
+  - [7, 300]  # gait
+
+body_transparency: 0.0
+show_from_behind: False
+use_default_pose: False
+show_sensors: True
+sensor_config: SSP
+real_data: True
+show_vertex_distance: False
+show_gt: True
+render_frames: 5
+render_every_n_frame: 20
+show_rendering: False
+orthographic_camera: True
+camera_translation: [0, 0.5, 1.75]
+render_width: 800
+make_gif: True
+gif_fps: 15
+
+
