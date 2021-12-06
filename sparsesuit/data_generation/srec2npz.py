@@ -28,13 +28,14 @@ def get_srec(file):
         rec = reader.ReadSrec(parse=False)
     except AssertionError:
         print("Asset {} is not valid.".format(file))
-        rec = SrecReader.SRec(".")
+        rec = SrecReader.SRec()
     return rec
 
 
-def parse_srec(rec):
+def parse_srec(suit):
     # get sensor order in our convention
-    sensor_add = rec.suits[0].frames[0].addresses
+    sensor_add = suit.frames[0].addresses
+    rec = SrecReader.SRec()
     sensor_names = [SREC_2_SSP[rec.setSensorName(add)] for add in sensor_add]
     sort_ids = [sensor_names.index(sensor) for sensor in SENS_NAMES_SSP]
 
@@ -42,7 +43,7 @@ def parse_srec(rec):
     calib_oris = smpl_helpers.get_straight_pose_oris()
 
     # parse all frames in file
-    frames = rec.suits[0].frames
+    frames = suit.frames
 
     # containers for calibration rotations from first frame
     ori_offsets = []
@@ -181,8 +182,8 @@ def vis_oris_accs(oris, accs, pose=None):
     from sparsesuit.utils import visualization, smpl_helpers, utils
 
     # select desired range of frames
-    play_frames = 300
-    initial_frame = 200
+    play_frames = 200
+    initial_frame = 500
     play_range = range(
         initial_frame, min(initial_frame + play_frames, len(pose), len(oris))
     )
@@ -264,7 +265,8 @@ if __name__ == "__main__":
         print(srec_file)
 
         # convert raw sensor data to accs and joint orientations in the model frame
-        oris, accs = parse_srec(rec)
+        suit = rec.suits[0]
+        oris, accs = parse_srec(suit)
 
         if VISUALIZE:
             visualize(oris, accs, srec_file)
