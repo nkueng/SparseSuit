@@ -38,6 +38,8 @@ show_world_axes: False
 show_model_axes: False
 show_joint_axes: False
 
+eval_rkk_studio: False
+
 #dataset:
 #  source: AMASS
 #  sensor_config: SSP

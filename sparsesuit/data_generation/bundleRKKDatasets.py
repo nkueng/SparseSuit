@@ -228,7 +228,7 @@ def split_data(sensor_acc, sensor_ori, vicon_poses, valid_frames):
 
 if __name__ == "__main__":
 
-    PLOT = False
+    PLOT = True
     SAVE_PLOTS = False  # saves plots instead of showing them
     SPLIT_INVALID = (
         False  # splits sequences with invalid frames into two and saves separately
@@ -357,6 +357,8 @@ if __name__ == "__main__":
             # correlate signals of chosen joint positions to find shift automatically
             studio_joints -= np.mean(studio_joints)
             vicon_joints -= np.mean(vicon_joints)
+            vicon_plot = vicon_joints.copy()
+            studio_plot = studio_joints.copy()
             corr = signal.correlate(studio_joints, vicon_joints, "full")
             shift = np.argmax(corr) - len(vicon_joints) + 1
             corr /= max(corr)
@@ -452,25 +454,29 @@ if __name__ == "__main__":
             # plot
             if PLOT:
                 data = {
-                    "vicon": vicon_joints,
+                    # "vicon": vicon_joints,
                     # "studio": studio_joints[: len(vicon_joints)],
-                    # "corr": corr,
-                    "studio_aligned": studio_joints_aligned,
-                    "valid_frames": valid_frames.astype(int) / 5,
-                    "acc": sensor_acc[:, 0, 2] / 80,
+                    # "vicon": vicon_plot,
+                    # "studio": studio_plot,
+                    "corr": corr,
+                    # "corr": corr[: 2 * len(vicon_joints)],
+                    # "studio_aligned": studio_joints_aligned,
+                    # "valid_frames": valid_frames.astype(int) / 5,
+                    # "acc": sensor_acc[:, 0, 2] / 80,
                 }
                 df = pd.DataFrame(data)
                 fig = px.line(
                     df,
                     y=[
-                        "vicon",
+                        # "vicon",
                         # "studio",
-                        # "corr",
-                        "studio_aligned",
+                        "corr",
+                        # "studio_aligned",
                         # "valid_frames",
                         # "acc",
                     ],
                     title=correspondence,
+                    color_discrete_sequence=["green"],
                 )
                 if SAVE_PLOTS:
                     img_folder = os.path.join(paths.DOC_PATH, "figures/RKK_VICON/", sub)

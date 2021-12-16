@@ -240,6 +240,36 @@ FBX_2_SMPL = {
     "RightFinger3Metacarpal": "right_hand",
 }
 
+# mapping VICON FBX joint names to our convention
+FBX_VICON_2_SMPL = {
+    "Hips": "pelvis",
+    "Spine": "spine1",
+    "Spine1": "spine2",
+    "Spine2": "spine3",
+    "Spine3": "spine4",
+    "Neck": "neck",
+    "Neck1": "neck1",
+    "Head": "head",
+    "RightShoulder": "right_collar",
+    "RightArm": "right_shoulder",
+    "RightForeArm": "right_elbow",
+    "RightHand": "right_wrist",
+    "LeftShoulder": "left_collar",
+    "LeftArm": "left_shoulder",
+    "LeftForeArm": "left_elbow",
+    "LeftHand": "left_wrist",
+    "RightUpLeg": "right_hip",
+    "RightLeg": "right_knee",
+    "RightFoot": "right_ankle",
+    "RightForeFoot": "right_foot",
+    "RightToeBase": "right_toe",
+    "LeftUpLeg": "left_hip",
+    "LeftLeg": "left_knee",
+    "LeftFoot": "left_ankle",
+    "LeftForeFoot": "left_foot",
+    "LeftToeBase": "left_toe",
+}
+
 # mocap markers used for illustrative purposes
 MOCAP_MARKERS = [
     5892,

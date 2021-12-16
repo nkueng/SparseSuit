@@ -60,11 +60,11 @@ def create_3d_bar_plot(values, title, error_type, folder_name):
     ax.set_ylabel("Joint Name")
     ax.yaxis.labelpad = 80
 
-    if error_type == "Angular":
-        ax.set_zlabel("Angular Error [$\degree$]")
+    if error_type == "Orientation":
+        ax.set_zlabel("Reconstruction Error [$\degree$]")
         ax.set_zlim(0, 40)
     else:
-        ax.set_zlabel("Positional Error [$cm$]")
+        ax.set_zlabel("Reconstruction Error [$cm$]")
         ax.set_zlim(0, 20)
 
     ax.view_init(30, -15)
@@ -90,13 +90,13 @@ def create_2d_bar_plot(values, title, error_type, folder_name):
     plt.figure(figsize=(8, 8), dpi=100)
     plt.title(title)
 
-    if error_type == "Angular":
-        plt.ylabel("Angular Error [$\degree$]")
+    if error_type == "Orientation":
+        plt.ylabel("Reconstruction Error [$\degree$]")
         y_lim = Y_LIM_ANG
         plot_color_min = PLOT_COLOR_MIN_ANG
         plot_color_max = PLOT_COLOR_MAX_ANG
     else:
-        plt.ylabel("Positional Error [$cm$]")
+        plt.ylabel("Reconstruction Error [$cm$]")
         y_lim = Y_LIM_POS
         plot_color_min = PLOT_COLOR_MIN_POS
         plot_color_max = PLOT_COLOR_MAX_POS
@@ -131,7 +131,7 @@ def create_2d_bar_plot(values, title, error_type, folder_name):
     plt.gca().set_aspect(aspect=0.1 * (len(x_labels) / 6) * (Y_LIM_ANG / y_lim))
     folder_path = os.path.join(paths.DOC_PATH, "figures", folder_name)
     Path(folder_path).mkdir(parents=True, exist_ok=True)
-    fig_path = os.path.join(folder_path, "_".join([title, "bar.png"]))
+    fig_path = os.path.join(folder_path, "_".join([error_type, title, "bar.png"]))
     plt.savefig(fig_path, bbox_inches="tight")
     plt.show()
     return
@@ -151,14 +151,19 @@ def create_grouped_2d_bar_plot(values, title, error_type, folder_name):
         for config in configs_ordered:
             plot_values[config] = values[config]
 
-    labels = ["Walk", "Run", "Sidestep", "Sway", "Jump"]
+    # add group for mean
+
+    # for sensor_config in plot_values:
+    # summary_stats[sensor_config] = (np.mean(data), np.std(data))
+
+    labels = ["Mean", "Walk", "Run", "Sidestep", "Sway", "Jump"]
     x = np.arange(len(labels))  # the label locations
     num_configs = len(plot_values)
     width = 1.0 / (num_configs + 2)  # the width of the bars
     x_offsets = np.arange(num_configs) / (num_configs - 1) - 0.5
-    x_offsets *= 0.75
+    x_offsets *= 0.17 * num_configs
 
-    fig, ax = plt.subplots(figsize=(9, 4))
+    fig, ax = plt.subplots(figsize=(14, 4))
 
     color_begin = 0.3
     color_end = 0.8
@@ -182,26 +187,28 @@ def create_grouped_2d_bar_plot(values, title, error_type, folder_name):
             yerr=stds,
             label=config_label,
             color=colors[i],
-            capsize=2,
+            capsize=4,
         )
 
     # Add some text for labels, title and custom x-axis tick labels, etc.
-    if error_type == "Angular":
-        ax.set_ylabel("Angular Error [$\degree$]")
+    if error_type == "Orientation":
+        ax.set_ylabel("Reconstruction Error [$\degree$]")
     else:
-        ax.set_ylabel("Positional Error [$cm$]")
+        ax.set_ylabel("Reconstruction Error [$cm$]")
 
-    ax.set_title(title)
+    # ax.set_title(title)
     ax.set_xticks(x)  # sets locations of xticks
     ax.set_xticklabels(labels)  # sets displayed text for xticks
     ax.yaxis.grid()
     ax.legend()
-    # ax.set_aspect(0.2)
+    # ax.legend(loc="upper left")
+    # ax.set_aspect(1 / 20)
 
     # save
     folder_path = os.path.join(paths.DOC_PATH, "figures", folder_name)
     Path(folder_path).mkdir(parents=True, exist_ok=True)
-    fig_path = os.path.join(folder_path, "_".join([title, "grouped_bar.png"]))
+    name = title.split("[")[0]
+    fig_path = os.path.join(folder_path, "_".join([error_type, "grouped_bar.png"]))
     plt.savefig(fig_path, bbox_inches="tight")
 
     fig.tight_layout()
@@ -265,7 +272,7 @@ def get_studio_data(error_stats):
     return error_stats
 
 
-def get_data_finetuned_frac_on_real():
+def get_data_finetuned_frac_on_real(eval_configs=None):
     # collect error statistics for neural networks that were finetuned on fractions and evaluated on real data
     error_stats = collections.defaultdict(dict)
     run_dir = paths.EVAL_PATH
@@ -276,6 +283,8 @@ def get_data_finetuned_frac_on_real():
             if "fraction" in root and "errs" in file:
                 err_type = file.replace("s.npz", "")
                 sensor_config = root.split("SSP_")[1].split("_fine")[0]
+                if sensor_config not in eval_configs and eval_configs is not None:
+                    continue
                 motion_type = fraction2motion[root.split("fraction")[1]]
                 data = np.load(os.path.join(root, file))
                 data = np.array(list(dict(data).values()))[:, sensors.ANG_EVAL_JOINTS]
@@ -390,7 +399,7 @@ def get_data_pretrained_on_syn():
     return error_stats
 
 
-def get_data_pretrained_on_syn_RKK():
+def get_data_pretrained_on_syn_RKK(eval_configs=None):
     # collect error statistics for neural networks that were pretrained on AMASS and evaluated on synthetic RKK_VICON
     error_stats = collections.defaultdict(dict)
     run_dir = paths.EVAL_PATH
@@ -404,6 +413,8 @@ def get_data_pretrained_on_syn_RKK():
                 error_i_stats = collections.defaultdict(dict)
                 data = dict(np.load(os.path.join(root, file)))
                 config_name = root.split("SSP_")[1].split("_")[0]
+                if config_name not in eval_configs and eval_configs is not None:
+                    continue
                 for motion in motion_types:
                     motion_i_data = []
                     for asset_name, errs in data.items():
@@ -420,7 +431,7 @@ def create_summary_bar_plot(error_stats, folder_name):
         for sensor_config, errs in err_values.items():
             data = np.vstack(list(errs.values()))
             summary_stats[sensor_config] = (np.mean(data), np.std(data))
-        title = "Mean {} Joint Error over all Motions"
+        title = "Mean Absolute Joint {} Error"
         title = title.format(err_type2str[error_type])
         create_2d_bar_plot(
             summary_stats,
@@ -436,7 +447,7 @@ def create_summary_box_plot(error_stats, folder_name):
         for sensor_config, errs in err_values.items():
             data = np.vstack(list(errs.values()))
             summary_stats[sensor_config] = data.flatten()
-        title = "Mean {} Joint Error over all Motions"
+        title = "Mean Absolute Joint {} Error"
         title = title.format(err_type2str[error_type])
         create_2d_box_plot(
             summary_stats,
@@ -456,10 +467,12 @@ def create_config_summary_bar_plot(error_stats, folder_name):
                     np.mean(errs),
                     np.std(errs),
                 )
+            # add group with means
+            data = np.vstack(list(values.values()))
+            error_i_stats[sensor_config]["Mean"] = (np.mean(data), np.std(data))
         config_stats[error_type] = error_i_stats
     for error_type, err_values in config_stats.items():
-        title = "Mean {} Joint Errors Over All Motion Types"
-        title = title.format(err_type2str[error_type], infinitive2ing[motion_type])
+        title = error_type
         create_grouped_2d_bar_plot(
             err_values,
             title,
@@ -481,8 +494,8 @@ def create_motion_bar_plots(error_stats, folder_name):
         motion_stats[error_type] = error_i_stats
     for error_type, err_values in motion_stats.items():
         for motion_type, values in err_values.items():
-            title = "Mean {} Joint Error for {} Motions"
-            title = title.format(err_type2str[error_type], infinitive2ing[motion_type])
+            title = infinitive2ing[motion_type]
+            # title = title.format(err_type2str[error_type], infinitive2ing[motion_type])
             create_2d_bar_plot(
                 values,
                 title,
@@ -494,8 +507,13 @@ def create_motion_bar_plots(error_stats, folder_name):
 if __name__ == "__main__":
 
     err_type2str = {
-        "ang_err": "Angular",
-        "pos_err": "Positional",
+        "ang_err": "Orientation",
+        "pos_err": "Position",
+    }
+
+    err_type2unit = {
+        "ang_err": "[$\degree$]",
+        "pos_err": "[$\cm$]",
     }
 
     infinitive2ing = {
@@ -518,6 +536,8 @@ if __name__ == "__main__":
         "4": "Sway",
         "5": "Jump",
     }
+
+    eval_configs = ["07", "13", "19"]
 
     amass2motion = {
         "KIT_11_RightTurn02": "Walk",
@@ -560,7 +580,7 @@ if __name__ == "__main__":
     # folder_name = "pretrained_on_syn"
 
     # evaluate the pretrained models on synthetic RKK_VICON
-    error_stats = get_data_pretrained_on_syn_RKK()
+    error_stats = get_data_pretrained_on_syn_RKK(eval_configs)
     folder_name = "pretrained_on_syn_RKK_VICON"
 
     # evaluate the pretrained models on real data
@@ -572,7 +592,7 @@ if __name__ == "__main__":
     # folder_name = "finetuned_on_real"
 
     # evaluate the fraction-finetuned models on real data
-    error_stats = get_data_finetuned_frac_on_real()
+    error_stats = get_data_finetuned_frac_on_real(eval_configs)
     folder_name = "finetuned_fraction_on_real"
 
     # evaluate models that were trained on real data on the same data
@@ -594,8 +614,8 @@ if __name__ == "__main__":
     # create configuration specific 3d graphs
     for err_type, errs in error_stats.items():
         for sensor_config, values in errs.items():
-            title = "{} Joint Errors for {} Sensors".format(
-                err_type2str[err_type], sensor_config
+            title = "Mean Absolute Joint {} Error per Motion and Joint for {} Sensors".format(
+                err_type2str[err_type], sensor_config.replace("0", "")
             )
             create_3d_bar_plot(values, title, err_type2str[err_type], folder_name)
 

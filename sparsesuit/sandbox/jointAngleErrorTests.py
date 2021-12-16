@@ -15,12 +15,12 @@ from sparsesuit.constants import paths, sensors
 
 def bar_plot_2d(data_dict, title):
     # make 2d bar plot over all joints
-    ang_errs = list(data_dict.values())
-    y_data = np.mean(ang_errs, axis=0)[sensors.ANG_EVAL_JOINTS]
-    y_avg = np.mean(y_data)
+    ang_errs = np.array(list(data_dict.values()))[:, sensors.ANG_EVAL_JOINTS]
+    y_data = np.mean(ang_errs, axis=0)
+    y_avg = np.mean(ang_errs)
     y_data = np.insert(y_data, 0, y_avg)
-    y_std = np.std(ang_errs, axis=0)[sensors.ANG_EVAL_JOINTS]
-    y_avg_std = np.std(y_data)
+    y_std = np.std(ang_errs, axis=0)
+    y_avg_std = np.std(ang_errs)
     y_std = np.insert(y_std, 0, y_avg_std)
 
     xtick_labels = list(sensors.SMPL_JOINT_IDS.keys())
@@ -76,7 +76,7 @@ def bar_plot_3d(data_dict, title):
     # make 3d bar plot over all joints and all motions
     fig = plt.figure(figsize=(16, 10), dpi=100)
     ax = fig.add_subplot(projection="3d")
-    ax.set_title(title)
+    ax.set_title(title, y=0.8)
 
     xtick_labels = np.array(["Walk", "Run", "Sidestep", "Sway", "Jump"])[
         sort_ids_m[::-1]

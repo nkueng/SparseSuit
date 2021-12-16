@@ -7,8 +7,11 @@ import numpy as np
 
 from sparsesuit.constants import paths, sensors
 from Skynet.Modules import MLRetargeting
+from Skynet.Transformations import TransformationLib
 
 from scipy.spatial.transform import Rotation as R
+
+import plotly.graph_objects as go
 
 
 def get_data(file_path):
@@ -19,7 +22,7 @@ def get_data(file_path):
         return None
 
 
-def retarget_motion(motion):
+def retarget_motion(motion, joint_mapping=sensors.FBX_2_SMPL, clip_first=True):
     # unpack input motion data
     parents_in = motion["parents"]
     skeleton_in = list(motion["skeleton"])
@@ -31,12 +34,22 @@ def retarget_motion(motion):
 
     # remove "root" from parents and skeleton as it is not in positions/rotations
     # parents_ = parents.copy()
-    parents_in = [parent - 1 for parent in parents_in[1:]]
-    # skeleton_ = skeleton.copy()
-    skeleton_in.remove("Root")
+    if len(positions_in[0]) != len(skeleton_in):
+        if "Root" in skeleton_in:
+            parents_in = [parent - 1 for parent in parents_in[1:]]
+            # skeleton_ = skeleton.copy()
+            skeleton_in.remove("Root")
+
+    # DEBUG visualization
+    # p_out, _ = TransformationLib.fk_pass(positions_in, rotations_in, parents_in)
+    # p_out = p_out[0] / 100
+    # x, y, z = p_out[:, 0], p_out[:, 1], p_out[:, 2]
+    # fig = go.Figure(data=[go.Scatter3d(x=x, y=y, z=z, mode="markers")])
+    # fig.show()
 
     # extract relevant joints from fbx data
-    fbx2smpl = sensors.FBX_2_SMPL
+    # fbx2smpl = sensors.FBX_2_SMPL
+    fbx2smpl = joint_mapping
     joints_rel = list(fbx2smpl.keys())
     positions_rel = []
     rotations_rel = []
@@ -66,7 +79,7 @@ def retarget_motion(motion):
         parents_rel,
         skeleton_rel,
         use_tiny=False,
-        from_frame=1,  # clip first frame with T-pose
+        from_frame=1 if clip_first else 0,  # clip first frame with T-pose
         max_ik_iterations=10,
         silent=True,
     )

@@ -17,3 +17,4 @@ sensors:
  - left_ankle
  - right_ankle
 
+show_rendering: False

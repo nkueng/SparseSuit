@@ -100,8 +100,14 @@ def parse_srec(suit):
                 right_world.append(right_i)
                 right_debug.append(right_i)
                 right_debug.append(right_i)
+
+            # average orientations from all 6 back sensors
             forward_world = np.mean(forward_world[:3], axis=0)
             right_world = np.mean(right_world[:3], axis=0)
+            # average from only 2 back sensors
+            # forward_world = forward_world[1]
+            # right_world = right_world[1]
+
             # rot_world_to_model = utils.rot_from_vecs(forward_world, np.array([1, 0, 0]))
             # find the rotation that aligns the model frame with the world frame
             # the model frame is given by the model-relative forward and right direction
@@ -135,13 +141,16 @@ def parse_srec(suit):
         # DEBUG visualizations
         # visualize orientations in global frame
         # ori_norm = ori_xyz_mat
+
         # visualize orientations in model frame
         # ori_norm = ori_model
+
         # visualize forward direction instead of accelerations
         # acc_model = np.stack(forward_debug)
         # forward = np.mean(acc_model[:6:2], axis=0)
         # acc_model = np.insert(acc_model, 6, np.ones([1, 3]), 0)
         # acc_model[6] = forward
+
         # visualize right direction instead of accelerations
         # acc_model = np.stack(right_debug)
         # right = np.mean(acc_model[:6:2], axis=0)
@@ -183,7 +192,7 @@ def vis_oris_accs(oris, accs, pose=None):
 
     # select desired range of frames
     play_frames = 200
-    initial_frame = 500
+    initial_frame = 200
     play_range = range(
         initial_frame, min(initial_frame + play_frames, len(pose), len(oris))
     )
@@ -214,7 +223,7 @@ def vis_oris_accs(oris, accs, pose=None):
         faces=smpl_model.faces,
         vertices=[verts],
         play_frames=play_frames,
-        playback_speed=0.2,
+        playback_speed=0.1,
         sensors=[verts[:, list(SENS_VERTS_SSP.values())]],
         oris=[oris],
         accs=[accs],

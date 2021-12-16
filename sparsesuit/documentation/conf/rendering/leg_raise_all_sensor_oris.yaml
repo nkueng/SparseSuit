@@ -1,10 +1,13 @@
 defaults:
-  - sensor_config
+  - default
 
-name: SSP_19
+name: leg_raise_all_sensor_oris
+render_width: 600
+body_transparency: 0.5
+show_sensor_orientations: True
 sensors:
  - left_pelvis
- - right_pelvis
+# - right_pelvis
  - left_back
  - right_back
  - left_collar
@@ -22,6 +25,9 @@ sensors:
  - right_knee
  - left_ankle
  - right_ankle
-
-#body_transparency: 0.0
-#show_from_behind: False
+render_every_n_frame: 1
+show_rendering: False
+orthographic_camera: True
+camera_translation: [0, 0.5, 1.75]
+make_gif: True
+gif_fps: 20

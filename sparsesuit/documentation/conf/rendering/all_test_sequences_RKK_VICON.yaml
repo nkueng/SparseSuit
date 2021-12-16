@@ -26,4 +26,6 @@ show_rendering: False
 orthographic_camera: True
 camera_translation: [0, 0.4, 1.75]
 make_gif: True
-
+# should render real-time speed
+render_every_n_frame_gif: 5
+gif_fps: 20

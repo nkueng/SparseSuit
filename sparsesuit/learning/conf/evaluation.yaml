@@ -7,10 +7,10 @@ evaluation:
     source: RKK_VICON
     fps: 100
     sensor_config: SSP
-#    synthesis:
-#      acc_noise: 0
-#      gyro_noise: 0
-#      acc_delta: 4
+    synthesis:
+      acc_noise: 0
+      gyro_noise: 0
+      acc_delta: 4
 
 debug: False
 visualize: False

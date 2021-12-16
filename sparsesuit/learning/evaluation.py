@@ -374,7 +374,14 @@ class Evaluator:
 
             # extract window and make prediction
             input_window = x[:, start_idx:end_idx]
+            # t_0 = time.perf_counter()
             pred_mean_window, pred_std_window, _, _ = self.model(input_window)
+            # delta_t = time.perf_counter() - t_0
+            # self.logger.info(
+            #     "Prediction took {} s, running at {} fps.".format(
+            #         delta_t, 1.0 / delta_t
+            #     )
+            # )
 
             # find index of frame between past and future frames
             pred_idx = min(step, self.past_frames)
