@@ -31,6 +31,27 @@ def get_srec(file):
         rec = SrecReader.SRec()
     return rec
 
+def extract_measurements(suit):
+    # get sensor order in our convention
+    sensor_add = suit.frames[0].addresses
+    rec = SrecReader.SRec()
+    sensor_names = [SREC_2_SSP[rec.setSensorName(add)] for add in sensor_add]
+    sort_ids = [sensor_names.index(sensor) for sensor in SENS_NAMES_SSP]
+
+    # parse all frames in file
+    frames = suit.frames
+
+    # containers for raw measurements per frame
+    accs = []
+    oris = []
+    for frame in frames:
+        # extract orientations in NED to XYZ as quaternions
+        oris.append(np.array(frame.quaternion)[sort_ids])
+
+        # extract acceleration in g (given in sensor frame)
+        accs.append(np.array(frame.acceleration)[sort_ids])
+
+    return np.stack(oris), np.stack(accs)
 
 def parse_srec(suit):
     # get sensor order in our convention
