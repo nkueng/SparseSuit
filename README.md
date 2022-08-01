@@ -1,5 +1,5 @@
-# Sparsesuit
-All code behind my MSc Thesis about reducing the number of sensors in an inertial motion capture suit.
+# SparseSuit
+All code behind my Master's thesis about reducing the number of sensors in an inertial motion capture suit.
 
 <p float="left">
   <img src="/7.gif" width="300" />
